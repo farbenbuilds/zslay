@@ -1,3 +1,8 @@
 # direnv
 .direnv/
 .envrc.cache
+
+# zig
+.zig-cache/
+zig-out/
+zig-cache/
