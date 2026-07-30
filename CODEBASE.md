@@ -57,9 +57,9 @@ Like the original wslay C library, zslay does not read from or write to network 
 
 To serve as a universal backend for Node.js, Deno, Rust, or C++, zslay exposes a strict C ABI:
 
-- Primitive types only (`usize`, `*c_void`, `u8`).
-- Stateful contexts are passed as opaque pointers.
-- Arrays and buffers are passed as strict pointer and length pairs.
+- Primitive types only (`usize`, `u8`, `c_int`).
+- Stateful contexts are passed as opaque pointers (`*anyopaque` or `*extern struct`).
+- Arrays and buffers are passed as strict many-item pointer and length pairs (e.g., `[*]const u8` and `usize` instead of Zig slices `[]const u8`).
 
 ### Compliance Testing Flow
 
