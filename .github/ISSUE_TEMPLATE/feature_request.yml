@@ -1,0 +1,51 @@
+name: Feature Request
+description: Suggest a new parser capability, API enhancement, or FFI improvement for zslay
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Feature Request
+        Thank you for contributing to **zslay**! 
+
+        *Please note that all new features must adhere to our core philosophy: **zero hidden allocations, I/O-agnostic design, and strict C-ABI compatibility**.*
+  - type: input
+    id: feature-description
+    attributes:
+      label: Feature Description
+      description: A short description of the feature or API enhancement you are proposing.
+      placeholder: E.g. Add support for the Per-Message Deflate extension (RFC 7692).
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation/Purpose
+      description: Why is this feature needed? Does it improve RFC compliance, consumer DX, or parsing performance?
+      placeholder: E.g. Allows Deno/Node.js consumers to handle compressed WebSocket frames efficiently via the FFI boundary without manual bit-shifting...
+    validations:
+      required: true
+  - type: textarea
+    id: desired-solution
+    attributes:
+      label: Desired Solution
+      description: How should this be implemented in Zig? How does it affect the C-ABI or the zero-allocation state machine?
+      placeholder: E.g. Add a new `extern struct zslay_extension_t` and pass it during parser initialization to keep the state machine flat...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Have you considered implementing this purely on the consumer side (e.g., in Deno/Rust/C) instead of modifying the zslay parser?
+      placeholder: E.g. Handling decompression entirely in the host runtime, but that requires extra buffer copying and complicates the callback flow...
+    validations:
+      required: false
+  - type: textarea
+    id: additional-info
+    attributes:
+      label: Additional Information
+      description: Any related RFC links, API design mockups in Zig/C, or Data-Oriented Design (DOD) memory impact considerations.
+      placeholder: E.g. RFC 7692 Section 7.2.3, or a proposed `packed struct` layout...
+    validations:
+      required: false

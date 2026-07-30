@@ -1,0 +1,69 @@
+name: Bug Report
+description: Submit a functional bug, protocol violation, or build issue for zslay
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Bug Report
+        Thank you for reporting an issue in **zslay**. 
+        *Note: If this is a memory safety issue (out-of-bounds read, use-after-free) or a parser panic, please use the `Security Vulnerability` template instead.*
+  - type: input
+    id: bug-description
+    attributes:
+      label: Bug Description
+      description: A concise description of the bug.
+      placeholder: E.g. Parser fails to unmask payloads when the payload length is exactly 126 bytes.
+    validations:
+      required: true
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this? Please provide a minimal Zig `test` block, a C FFI snippet, or the raw hex bytes of the WebSocket frame.
+      placeholder: |
+        1. Initialize parser with `zslay_...`
+        2. Feed the following hex payload: `81 85 37 fa 21 3d 7f 9f 4d 51 58`
+        3. Observe the parsing state machine
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen according to RFC 6455 or the zslay API?
+      placeholder: E.g. The parser should transition to the PAYLOAD state and return the cleanly unmasked bytes.
+    validations:
+      required: true
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+      placeholder: E.g. The state machine gets stuck in the MASKING_KEY state or drops the FIN bit.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment & Toolchain
+      description: Information about your Zig version, OS, Architecture, and integration method.
+      placeholder: E.g. Zig 0.16.0, NixOS x86_64, using the C static library via Deno FFI.
+    validations:
+      required: true
+  - type: textarea
+    id: logs-and-dumps
+    attributes:
+      label: Logs, Stack Traces, or Hex Dumps (if any)
+      description: Paste any build errors, Zig compiler traces, or Autobahn testsuite failures. Please wrap them in code blocks (```).
+      placeholder: E.g. Deno Autobahn case 1.1.3 failure logs...
+    validations:
+      required: false
+  - type: textarea
+    id: additional-info
+    attributes:
+      label: Additional Information
+      description: Any other context, such as compiler optimization flags (e.g., `-O ReleaseFast`) or specific memory layout constraints you are hitting.
+      placeholder: E.g. I am compiling with musl on aarch64 and noticed...
+    validations:
+      required: false
