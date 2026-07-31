@@ -22,6 +22,7 @@ tests/                    # Integration testing
 build.zig                 # Zig build script (static lib and module definitions)
 build.zig.zon             # Zig package manager manifest
 flake.nix                 # Nix cross-compilation environment and outputs
+.envrc                    # direnv configuration to auto-load the Nix flake shell
 
 ```
 

@@ -2,12 +2,46 @@
 
 How to set up, develop, test, commit, and release. For architecture see [CODEBASE.md](CODEBASE.md); for code style see [CODING_CONVENTION.md](CODING_CONVENTION.md).
 
+## Local Setup & Initialization
+
+This project strictly relies on Nix for a reproducible development environment. You do not need to install Zig manually on your host OS.
+
+### Prerequisites
+
+- Install [Nix](https://nixos.org/download) with Flakes enabled.
+- Install [direnv](https://direnv.net/) and hook it into your shell.
+
+### Initialization
+
+1. Clone the repository:
+
+```bash
+git clone https://github.com/farbenbuilds/zslay.git
+
+cd zslay
+
+```
+
+2. Allow direnv to read the `.envrc` file and load the workspace. This will automatically fetch Zig 0.16.0 and required build tools natively via `flake.nix`:
+
+```bash
+direnv allow
+
+```
+
+3. Verify the environment is properly isolated:
+
+```bash
+zig version # Must output 0.16.0
+
+```
+
 ## Build / Dev / Lint Commands
 
 Development environment is managed via Nix flakes. Code is written in Zig 0.16.0.
 
 ```bash
-nix develop               # enter the reproducible dev shell with Zig 0.16.0
+nix develop               # enter the reproducible dev shell manually (if not using direnv)
 nix build                 # build cross-platform artifacts via flake-parts
 
 ```
@@ -17,7 +51,8 @@ Zig backend (run from project root):
 ```bash
 zig build                 # build the static library artifact (outputs to zig-out/lib/)
 zig build test            # run unit tests in src/test.zig
-zig fmt --check .         # lint code (strict, fails if formatting is dirty)
+zig build check           # run semantic linter (type-check without emitting binaries)
+zig fmt --check .         # verify code formatting
 zig fmt .                 # format code automatically
 
 ```
@@ -35,8 +70,27 @@ zig build test
 
 ## Pre-commit Hooks
 
-No automated pre-commit hook is currently configured locally.
-Always run `zig fmt .` and `zig build test` before committing to ensure the CI pipeline does not fail on your pull request.
+This project uses `pre-commit` to guarantee code formatting, syntax correctness, and type safety before any commit is created. The `pre-commit` tool is automatically provided by our Nix development shell.
+
+After cloning the repository, install the git hooks locally:
+
+```bash
+pre-commit install
+
+```
+
+Every time you run `git commit`, the following checks will execute automatically (fail-fast):
+
+1. **zig-fmt**: Auto-formats staged `.zig` files.
+2. **zig-ast-check**: Performs a lightning-fast syntax validation.
+3. **zig-build-check**: Runs the Zig compiler's semantic analysis and type-checking via `zig build check`.
+
+To run all checks manually across the entire codebase at any time:
+
+```bash
+pre-commit run --all-files
+
+```
 
 ## Commit Convention
 
