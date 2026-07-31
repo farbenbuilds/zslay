@@ -102,7 +102,7 @@ Example: `feat(core): implement dod frame header packed struct`
 
 ## CI/CD
 
-Full pipeline reference: [CI_CD_PIPELINE.md](https://www.google.com/search?q=CI_CD_PIPELINE.md).
+Full pipeline reference: [CI_CD_PIPELINE.md](CI_CD_PIPELINE.md).
 
 - Lint (`lint.yml`): runs `zig fmt --check .` on every pull request into `main` modifying `.zig`, `.zon`, or `build.zig` files (Ubuntu, Zig 0.16.0).
 - Release (`publish.yml`): triggered by pushing a version tag matching `v*` (e.g. `v0.1.0`).
