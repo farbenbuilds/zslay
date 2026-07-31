@@ -31,7 +31,7 @@ We will close all issues that are general support requests and direct people to 
 
 ## Found a Bug?
 
-If you find a bug in the source code, you can help us by [submitting an issue](#submitting-an-issue) to our [GitHub Repository](https://github.com/HopeArtOrg/hope-website/issues).
+If you find a bug in the source code, you can help us by [submitting an issue](#submitting-an-issue) to our [GitHub Repository](https://github.com/farbenbuilds/zslay/issues).
 Even better, you can [submit a Pull Request](#submitting-a-pull-request-pr) with a fix.
 
 ## Missing a Feature?
@@ -50,13 +50,13 @@ Before you submit an issue, please search the issue tracker. An issue for your p
 
 We want to fix all issues as soon as possible, but before fixing a bug, we need to reproduce and confirm it. To reproduce bugs, we require that you provide a minimal reproduction.
 
-You can create a new issue by selecting from our [new issue templates](https://github.com/HopeArtOrg/hope-website/issues/new/choose) and filling out the form.
+You can create a new issue by selecting from our [new issue templates](https://github.com/farbenbuilds/zslay/issues/new/choose) and filling out the form.
 
 ### Submitting a Pull Request (PR)
 
 Before you submit a Pull Request (PR), please consider the following guidelines:
 
-1. Search [GitHub PRs](https://github.com/HopeArtOrg/hope-website/pulls) for an open or closed PR that relates to your submission.
+1. Search [GitHub PRs](https://github.com/farbenbuilds/zslay/pulls) for an open or closed PR that relates to your submission.
 2. Make sure there is an issue describing the problem you're fixing, or documenting the design for the feature you'd like to add.
 3. Please sign our [Contributor License Agreement (CLA)](#signing-the-cla) before sending PRs.
 4. [Fork](https://docs.github.com/en/github/getting-started-with-github/fork-a-repo) the repository.
