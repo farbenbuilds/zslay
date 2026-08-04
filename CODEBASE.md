@@ -8,15 +8,19 @@
 
 The repository is organized into distinct files, separating contiguous data layouts from stateful pipelines to prevent pointer chasing and ensure acyclic compilation dependencies.
 
-| C File (wslay)            | Zig File (zslay) | Architecture & Architectural Role (DOD / Zero-Allocation)                                                                                                                                                |
-| :------------------------ | :--------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `wslay.h` / `wslay_net.h` | `src/types.zig`  | **Data Types**: Contains packed structs (e.g., `FrameHeader`), non-exhaustive enums (Opcodes, Status Codes), and error sets with explicit backing integers. Separates data layout from behavioral logic. |
-| `wslay_frame.c` / `.h`    | `src/frame.zig`  | **Low-Level Parser**: Implements stateless, pure functions to encode/decode raw frames and perform optimized XOR masking on contiguous byte buffers. Entirely I/O-agnostic.                              |
-| `wslay_queue.c` / `.h`    | `src/queue.zig`  | **Data-Oriented Queue**: Implements zero-allocation bounded ring buffers or intrusive linked lists, avoiding any heap allocations or dynamic nodes.                                                      |
-| `wslay_event.c` / `.h`    | `src/event.zig`  | **State Machine & High-Level API**: Manages high-level connection lifecycles and schedules callbacks. Operates strictly on pre-allocated static contexts.                                                |
-| _(None - C Native)_       | `src/c_api.zig`  | **C Compatibility Layer**: Exposes C-ABI compatible FFI wrappers (`export fn`) using primitive types, many-item pointers, and opaque contexts for Node.js, Deno, and Rust consumers.                     |
-| _(None)_                  | `src/main.zig`   | **Root Module**: Serves as the primary entry point for the Zig package system, packaging and exporting modules for domestic Zig package manager consumers.                                               |
-| `tests/` (CUnit)          | `src/test.zig`   | **Native Unit Tests**: Contains Zig-native `test` blocks asserting struct alignments, bit-width mapping, XOR masking math, and state machine invariants.                                                 |
+| C File (wslay)            | Zig File (zslay)     | Architecture & Architectural Role (DOD / Zero-Allocation)                                                                                                                                                |
+| :------------------------ | :------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wslay.h` / `wslay_net.h` | `src/types.zig`      | **Data Types**: Contains packed structs (e.g., `FrameHeader`), non-exhaustive enums (Opcodes, Status Codes), and error sets with explicit backing integers. Separates data layout from behavioral logic. |
+| `wslay_frame.c` / `.h`    | `src/frame.zig`      | **Low-Level Parser**: Implements stateless, pure functions to encode/decode raw frames and perform optimized XOR masking on contiguous byte buffers. Entirely I/O-agnostic.                              |
+| `wslay_queue.c` / `.h`    | `src/queue.zig`      | **Data-Oriented Queue**: Implements zero-allocation bounded ring buffers or intrusive linked lists, avoiding any heap allocations or dynamic nodes.                                                      |
+| `wslay_event.c` / `.h`    | `src/event.zig`      | **State Machine & High-Level API**: Manages high-level connection lifecycles and schedules callbacks. Operates strictly on pre-allocated static contexts.                                                |
+| _(None - C Native)_       | `src/c_api.zig`      | **C Compatibility Layer**: Exposes C-ABI compatible FFI wrappers (`export fn`) using primitive types, many-item pointers, and opaque contexts for Node.js, Deno, and Rust consumers.                     |
+| _(None)_                  | `src/main.zig`       | **Root Module**: Serves as the primary entry point for the Zig package system, packaging and exporting modules for domestic Zig package manager consumers.                                               |
+| `tests/` (CUnit)          | `src/test.zig`       | **Native Unit Tests**: Contains Zig-native `test` blocks asserting struct alignments, bit-width mapping, XOR masking math, and state machine invariants.                                                 |
+| `.github/workflows`       | `.github/workflows/` | **CI/CD Pipelines**: Contains GitHub Actions workflows for automated code linting, native Zig testing, Deno-FFI compliance verification, and package publishing.                                         |
+| _(None)_                  | `flake.nix`          | **Nix Development Environment**: Declares the reproducible development environment, pinning the exact Zig 0.16.0 compiler, Deno, and necessary development tools.                                        |
+| _(None)_                  | `flake.lock`         | **Nix Lockfile**: Stores exact hashes and revisions of Nix dependency inputs to guarantee bit-for-bit reproducibility across all environments.                                                           |
+| _(None)_                  | `.envrc`             | **Direnv Shell Trigger**: Integrates with `direnv` to automatically load the Nix development environment (`use flake`) upon entering the workspace directory.                                            |
 
 ---
 
@@ -49,32 +53,36 @@ To integrate seamlessly with external runtimes (such as Deno, Rust, or Node.js),
 
 ---
 
-## Testing & Verification Flow
+## Testing, Verification & CI/CD Flow
 
-Reliability and protocol compliance are enforced through a layered testing strategy:
+Reliability, style compliance, and protocol correctness are enforced automatically through a layered testing strategy driven by the Nix package manager and automated continuous integration.
 
-### 1. Zig Unit Tests (`src/test.zig`)
+### 1. Nix-Powered Local Environment
 
-The native test suite in `src/test.zig` is compiled and run via `zig build test`. It directly verifies:
+To guarantee hermetic and reproducible builds, all development, testing, and distribution workflows are executed inside a pinned Nix shell environment (`flake.nix` with `direnv`). This eliminates the "works on my machine" problem by ensuring every developer and CI runner uses the exact same Zig 0.16.0 compiler, Deno runtime, and test dependencies.
+
+### 2. Zig Unit Tests (`src/test.zig`)
+
+The native unit test suite is executed within the Nix environment via `nix develop --command zig build test`. It directly asserts:
 
 - Physical memory footprint and alignment of packed structures (e.g., verifying `@bitSizeOf(FrameHeader) == 16`).
 - Mathematical correctness of the XOR masking implementation.
 - Edge cases of the event queue and bounded ring buffers.
 - State transition validation under invalid protocol payloads.
 
-### 2. Integration & Compliance Testing (Deno & Autobahn)
+### 3. Deno & Autobahn Compliance Testing
 
-For FFI and RFC 6455 compliance:
+For FFI boundary and RFC 6455 compliance, we leverage Nix to orchestrate a complete Autobahn test harness without requiring manual global software installations:
 
-- The Deno test harness loads the compiled static library (`.a` / `.lib`) or shared object using the C-ABI.
-- Deno drives an Autobahn test client/server, executing fuzzing payloads through the FFI boundaries.
-- This verifies parsing resilience against malformed frames, UTF-8 boundaries, and invalid control codes without memory corruption or run-time panics.
+- The Deno test harness loads the compiled C-ABI library (`.a` / `.so`) within a Nix shell containing the precise Deno version.
+- Nix provisions the necessary testing dependencies (including Deno, Python, and the Autobahn Testsuite CLI).
+- Fuzzing payloads are fed through the FFI boundary to validate UTF-8 validation, fragmentation logic, and control code handling against RFC 6455 edge cases without triggering memory corruption or panics.
 
-### 3. Automated Workflows (`.github/workflows/`)
+### 4. Automated Workflows (`.github/workflows/`)
 
-GitHub Actions automatically execute on every push and pull request to maintain codebase health, enforce strict performance invariants, and verify FFI boundary safety:
+GitHub Actions automatically spin up a Nix environment on every push and pull request to execute the pipeline:
 
-- **`lint.yml` (Code Style & Formatting)**: Enforces the project's custom Linux Kernel Coding Style. Since `zslay` rejects standard `zig fmt` (which forces a 4-space indent) in favor of 1 Tab (8-space) indentation, this workflow utilizes custom scripting or `editorconfig-checker` to validate proper tab-indentation, prevent trailing whitespaces, and verify the 120-character line limit.
-- **`test.yml` (Native Zig Unit Testing)**: Compiles and executes the native unit test suite located in `src/test.zig` on every push and pull request. It cross-compiles against Tier 1 and Tier 2 targets (e.g., `x86_64-linux`, `aarch64-macos`, `x86_64-windows`) to assert struct alignments, physical memory layouts (such as `@bitSizeOf(FrameHeader) == 16`), and verify that zero-allocation guarantees are fully preserved.
-- **`deno-test.yml` (Deno-FFI & Autobahn Compliance)**: Asserts the safety and correctness of the C-ABI boundaries. It compiles `zslay` into a static/shared library, dynamically loads it into the Deno runtime via FFI, and executes integration tests. Deno drives an Autobahn Testsuite harness, feeding raw fuzzing payloads through the FFI boundary to validate UTF-8 validation, fragmentation logic, and control code handling without causing memory leaks or runtime panics.
-- **`publish.yml` (Release Packaging & Distribution)**: Automates the production build and deployment pipeline whenever a new Git release tag (e.g., `v1.0.0`) is pushed. It cross-compiles optimized static libraries (`.a` / `.lib`) and shared objects for all targeted platforms, generates the corresponding C header files, packages the Zig module, and publishes the compiled assets directly to GitHub Releases.
+- **`lint.yml` (Code Style & Formatting)**: Uses Nix-cached linters to enforce the project's 1 Tab (8-space) indentation, line limits, and trailing whitespace rules.
+- **`test.yml` (Native Zig Unit Testing)**: Installs Nix, restores cached builds, and executes cross-platform unit tests (`zig build test`) across multiple targets.
+- **`deno-test.yml` (Deno-FFI & Autobahn Compliance)**: Spins up the Deno/Autobahn environment via Nix, compiles the FFI module, and runs the entire compliance suite.
+- **`publish.yml` (Release Packaging & Distribution)**: Triggered by release tags. It uses Nix to cross-compile production-optimized static libraries (`.a` / `.lib`) and shared objects, generates C headers, and uploads assets directly to GitHub Releases.
