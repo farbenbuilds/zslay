@@ -33,3 +33,15 @@ pub const StatusCode = enum(u16) {
     tls_handshake = 1015,
     _,
 };
+
+// Error - Pure Zig error set for WebSocket frame parsing
+// bubbled up through Zig return traces for robust errot handling
+pub const Error = error{
+    InvalidOpcode,
+    InvalidLength,
+    BufferTooShort,
+
+    ProtocolError,
+    PayloadMasked,
+    PayloadNotMasked,
+};
