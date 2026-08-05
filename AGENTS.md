@@ -59,7 +59,7 @@ When touching `src/c_api.zig` or `src/types.zig`:
 
 ## 5. Coding & Workflow Rules
 
-- **Comments:** Use as few comments as possible (maximum 2 lines per comment block).
+- **Comments:** Use as few comments as possible (maximum 2 lines per comment block). Always use `//` for comments. Do NOT use `///` or block comments (`/* */`).
 - **Style:** Follow the Linux coding style convention and Zig best practices.
 - **Emojis:** NO EMOJIS are allowed anywhere in this project (code, comments, commits, PRs, etc.).
 - **Git Workflow:** Follow the project's Git rules before pushing code to GitHub (see the `github-git` skill).
