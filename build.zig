@@ -6,18 +6,15 @@ pub fn build(b: *std.Build) void {
 
     // export pure Zig module for other Zig projects integration
     // registered with the name "zslay"
-    const zslay_mod = b.addModule("zslay", .{
+    _ = b.addModule("zslay", .{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    _ = zslay_mod;
-
     // build C-compatible static library through src/c_api.zig
     // compiles exported symbols with C calling conventions
-    const lib = b.addLibrary(.{
-        .linkage = .static,
+    const lib = b.addStaticLibrary(.{
         .name = "zslay",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/c_api.zig"),

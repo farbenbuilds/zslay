@@ -1,9 +1,5 @@
 const std = @import("std");
 
-// A zero-allocation, bounded ring buffer.
-// DOD: Uses contiguous memory, explicit small indices (u16) instead of pointers,
-//      and eliminates pointer chasing/intrusive links.
-// FP: Functions return explicit Optionals and Error sets rather than hidden failures.
 pub fn Queue(comptime T: type) type {
     return struct {
         const Self = @This();
@@ -13,7 +9,7 @@ pub fn Queue(comptime T: type) type {
         tail: u16 = 0,
         len: u16 = 0,
 
-        // init - initializes a queue with a pre-allocated slice
+        // initializes a queue with a pre-allocated slice
         pub fn init(buffer: []T) Self {
             std.debug.assert(buffer.len <= std.math.maxInt(u16));
             return .{
@@ -21,7 +17,7 @@ pub fn Queue(comptime T: type) type {
             };
         }
 
-        // push_back - appends an item to the tail of the queue
+        // appends an item to the tail of the queue
         pub fn push_back(self: *Self, item: T) error{QueueFull}!void {
             if (self.len >= self.buffer.len) return error.QueueFull;
 
@@ -30,7 +26,7 @@ pub fn Queue(comptime T: type) type {
             self.len += 1;
         }
 
-        // push_front - prepends an item to the head of the queue
+        // prepends an item to the head of the queue
         pub fn push_front(self: *Self, item: T) error{QueueFull}!void {
             if (self.len >= self.buffer.len) return error.QueueFull;
 
@@ -39,7 +35,7 @@ pub fn Queue(comptime T: type) type {
             self.len += 1;
         }
 
-        // pop_front - removes and returns the head item of the queue
+        // removes and returns the head item of the queue
         pub fn pop_front(self: *Self) ?T {
             if (self.len == 0) return null;
 
@@ -49,7 +45,7 @@ pub fn Queue(comptime T: type) type {
             return item;
         }
 
-        // pop_back - removes and returns the tail item of the queue
+        // removes and returns the tail item of the queue
         pub fn pop_back(self: *Self) ?T {
             if (self.len == 0) return null;
 
