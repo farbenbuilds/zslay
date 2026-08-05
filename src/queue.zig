@@ -1,104 +1,62 @@
 const std = @import("std");
 
-// intrusive link node containing pointers to neighbors
-// embedded inside the queued structures to avoid dynamic memory allocation
-pub fn node(comptime T: type) type {
-    return struct {
-        next: ?*T = null,
-        prev: ?*T = null,
-    };
-}
-
-// a generic, zero allocation intrusive doubly-linked list
-// target struct T must contain a field of type node(T)
-pub fn queue(comptime T: type, comptime link_name: []const u8) type {
+// A zero-allocation, bounded ring buffer.
+// DOD: Uses contiguous memory, explicit small indices (u16) instead of pointers,
+//      and eliminates pointer chasing/intrusive links.
+// FP: Functions return explicit Optionals and Error sets rather than hidden failures.
+pub fn Queue(comptime T: type) type {
     return struct {
         const Self = @This();
 
-        head: ?*T = null,
-        tail: ?*T = null,
-        len: usize = 0,
+        buffer: []T,
+        head: u16 = 0,
+        tail: u16 = 0,
+        len: u16 = 0,
 
-        // init - initializes an empty intrusive queue
-        pub fn init() Self {
-            return .{};
+        // init - initializes a queue with a pre-allocated slice
+        pub fn init(buffer: []T) Self {
+            std.debug.assert(buffer.len <= std.math.maxInt(u16));
+            return .{
+                .buffer = buffer,
+            };
         }
 
-        // get_link - helper to obtain a pointer to the link node inside T
-        inline fn get_link(node: *T) *Node(T) {
-            return &@field(node, link_name);
-        }
+        // push_back - appends an item to the tail of the queue
+        pub fn push_back(self: *Self, item: T) error{QueueFull}!void {
+            if (self.len >= self.buffer.len) return error.QueueFull;
 
-        pub fn push_back(self: *Self, node: *T) void {
-            const link = get_link(node);
-
-            link.next = null;
-            link.prev = self.tail;
-
-            if (self.tail) |t| {
-                get_link(t).next = node;
-            } else {
-                self.head = node;
-            }
-
-            self.tail = node;
+            self.buffer[self.tail] = item;
+            self.tail = @intCast((self.tail + 1) % self.buffer.len);
             self.len += 1;
         }
 
-        // push_front - prepends a node to the head of the queue
-        pub fn push_front(self: *Self, node: *T) void {
-            const link = get_link(node);
-            link.next = self.head;
-            link.prev = null;
+        // push_front - prepends an item to the head of the queue
+        pub fn push_front(self: *Self, item: T) error{QueueFull}!void {
+            if (self.len >= self.buffer.len) return error.QueueFull;
 
-            if (self.head) |h| {
-                get_link(h).prev = node;
-            } else {
-                self.tail = node;
-            }
-
-            self.head = node;
+            self.head = if (self.head == 0) @intCast(self.buffer.len - 1) else self.head - 1;
+            self.buffer[self.head] = item;
             self.len += 1;
         }
 
-        // pop_front - removes and returns the head node of the queue
-        pub fn pop_front(self: *Self) ?*T {
-            const node = self.head orelse return null;
-            const link = get_link(node);
+        // pop_front - removes and returns the head item of the queue
+        pub fn pop_front(self: *Self) ?T {
+            if (self.len == 0) return null;
 
-            self.head = link.next;
-
-            if (self.head) |h| {
-                get_link(h).prev = null;
-            } else {
-                self.tail = null;
-            }
-
-            link.next = null;
-            link.prev = null;
+            const item = self.buffer[self.head];
+            self.head = @intCast((self.head + 1) % self.buffer.len);
             self.len -= 1;
-            return node;
+            return item;
         }
 
-        // remove - removes a specific node from anywhere in the queue
-        pub fn remove(self: *Self, node: *T) void {
-            const link = get_link(node);
+        // pop_back - removes and returns the tail item of the queue
+        pub fn pop_back(self: *Self) ?T {
+            if (self.len == 0) return null;
 
-            if (link.prev) |p| {
-                get_link(p).next = link.next;
-            } else {
-                self.head = link.next;
-            }
-
-            if (link.next) |n| {
-                get_link(n).prev = link.prev;
-            } else {
-                self.tail = link.prev;
-            }
-
-            link.next = null;
-            link.prev = null;
+            self.tail = if (self.tail == 0) @intCast(self.buffer.len - 1) else self.tail - 1;
+            const item = self.buffer[self.tail];
             self.len -= 1;
+            return item;
         }
     };
 }
