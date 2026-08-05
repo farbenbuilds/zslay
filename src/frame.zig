@@ -89,3 +89,103 @@ pub fn encode_header(buf: []u8, header: types.FrameHeader, extended_len: u64, ma
 
     return index;
 }
+
+// decode_header - parses a raw byte buffer into a DecodedHeader struct
+// ensures absolute bounds safety and validates protocol invariants
+pub fn decode_header(buf: []const u8) types.Error!DecoderHeader {
+    if (buf.len < 2) {
+        return error.BufferTooShort;
+    }
+
+    const b0 = buf;
+    const b1 = buf[1];
+
+    const header = types.FrameHeader{
+        .payload_len = @intCast(b1 & 0x7f),
+        .mask = (b1 & 0x80) != 0,
+        .opcode = @intCast(b0 & 0x0f),
+        .rsv3 = (b0 & 0x10) != 0,
+        .rsv2 = (b0 & 0x20) != 0,
+        .rsv1 = (b0 & 0x40) != 0,
+        .fin = (b0 & 0x80) != 0,
+    };
+
+    const op: types.Opcode = @enumFromInt(header.opcode);
+
+    switch (op) {
+        .continuation, .text, .binary, .close, .ping, .pong => {},
+        _ => return error.InvalidOpcode,
+    }
+
+    if (op.is_control()) {
+        if (header.payload_len >= 126) {
+            return error.ProtocolError;
+        }
+
+        if (!header.fin) {
+            return error.ProtocolError;
+        }
+    }
+
+    var index: usize = 2;
+    var extended_len: u64 = 0;
+
+    if (header.payload_len == 126) {
+        if (buf.len < 4) {
+            return error.BufferTooShort;
+        }
+
+        extended_len = (@as(u64, buf[index]) << 8) | buf[index + 1];
+        index += 2;
+
+        if (extended_len < 126) {
+            return error.ProtocolError;
+        }
+    } else if (header.payload_len == 127) {
+        if (buf.len < 10) {
+            return error.BufferTooShort;
+        }
+
+        extended_len = 0;
+        var i: usize = 0;
+
+        while (i < 8) : (i += 1) {
+            extended_len = (extended_len << 8) | buf[index + i];
+        }
+
+        index += 8;
+
+        if (extended_len < 65536) {
+            return error.ProtocolError;
+        }
+
+        if ((extended_len & (@as(u64, 1) << 63)) != 0) {
+            return error.InvalidLength;
+        }
+    } else {
+        extended_len = header.payload_len;
+    }
+
+    var masking_key: ?types.MaskingKey = null;
+
+    if (header.mask) {
+        if (buf.len < index + 4) {
+            return error.BufferTooShort;
+        }
+
+        var key: types.MaskingKey = undefined;
+
+        @memcpy(&key, buf[index .. index + 4]);
+
+        masking_key = key;
+
+        index += 4;
+    }
+
+    return DecoderHeader{
+        .header = header,
+        .extended_len = extended_len,
+        .masking_key = masking_key,
+        .header_size = index,
+    };
+}
