@@ -17,3 +17,21 @@ pub fn mask(buf: []u8, masking_key: types.MaskingKey, pos: usize) void {
         b.* ^= masking_key[(pos + i) % 4];
     }
 }
+
+// get_serialized_size - computes physical header byte length
+// derived strictly from payload length and masking flags
+pub fn get_serialized_size(payload_len: u64, is_masked: bool) usize {
+    var size: usize = 2;
+
+    if (payload_len >= 126 and payload_len <= 65535) {
+        size += 2;
+    } else if (payload_len > 65535) {
+        size += 8;
+    }
+
+    if (is_masked) {
+        size += 4;
+    }
+
+    return size;
+}
