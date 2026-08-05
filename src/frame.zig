@@ -1,7 +1,7 @@
 const std = @import("std");
 const types = @import("types.zig");
 
-/// Unpacked frame header properties
+// Unpacked frame header properties
 pub const DecoderHeader = struct {
     extended_len: u64,
     header_size: usize,
@@ -9,14 +9,14 @@ pub const DecoderHeader = struct {
     header: types.FrameHeader,
 };
 
-/// Performs in-place WebSocket XOR masking/unmasking
+// Performs in-place WebSocket XOR masking/unmasking
 pub fn mask(buf: []u8, masking_key: types.MaskingKey, pos: usize) void {
     for (buf, 0..) |*b, i| {
         b.* ^= masking_key[(pos + i) % 4];
     }
 }
 
-/// Computes physical header byte length
+// Computes physical header byte length
 pub fn get_serialized_size(payload_len: u64, is_masked: bool) usize {
     var size: usize = 2;
 
@@ -33,7 +33,7 @@ pub fn get_serialized_size(payload_len: u64, is_masked: bool) usize {
     return size;
 }
 
-/// Serializes frame properties into a raw byte buffer
+// Serializes frame properties into a raw byte buffer
 pub fn encode_header(buf: []u8, header: types.FrameHeader, extended_len: u64, masking_key: ?types.MaskingKey) types.Error!usize {
     const actual_len = if (header.payload_len < 126) header.payload_len else extended_len;
     const required_size = get_serialized_size(actual_len, header.mask);
@@ -69,7 +69,7 @@ pub fn encode_header(buf: []u8, header: types.FrameHeader, extended_len: u64, ma
     return index;
 }
 
-/// Parses a raw byte buffer into a DecoderHeader struct
+// Parses a raw byte buffer into a DecoderHeader struct
 pub fn decode_header(buf: []const u8) types.Error!DecoderHeader {
     if (buf.len < 2) {
         return error.BufferTooShort;

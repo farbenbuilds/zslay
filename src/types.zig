@@ -1,6 +1,6 @@
 const std = @import("std");
 
-/// WebSocket frame opcodes defined in RFC 6455
+// WebSocket frame opcodes defined in RFC 6455
 pub const Opcode = enum(u4) {
     continuation = 0x0,
     text = 0x1,
@@ -16,7 +16,7 @@ pub const Opcode = enum(u4) {
     }
 };
 
-/// WebSocket connection close status codes
+// WebSocket connection close status codes
 pub const StatusCode = enum(u16) {
     normal_closure = 1000,
     going_away = 1001,
@@ -36,7 +36,7 @@ pub const StatusCode = enum(u16) {
     _,
 };
 
-/// Pure Zig error set for WebSocket frame parsing
+// Pure Zig error set for WebSocket frame parsing
 pub const Error = error{
     InvalidOpcode,
     InvalidLength,
@@ -47,7 +47,7 @@ pub const Error = error{
     PayloadNotMasked,
 };
 
-/// Contiguous 16-bit physical layout of a WebSocket header
+// Contiguous 16-bit physical layout of a WebSocket header
 pub const FrameHeader = packed struct(u16) {
     opcode: u4,
     rsv3: bool,
@@ -59,5 +59,5 @@ pub const FrameHeader = packed struct(u16) {
     mask: bool,
 };
 
-/// 4-byte contiguous array used for frame payload XOR masking
+// 4-byte contiguous array used for frame payload XOR masking
 pub const MaskingKey = [4]u8;
