@@ -11,6 +11,10 @@ pub const Opcode = enum(u4) {
     ping = 0x9,
     pong = 0xa,
     _,
+
+    pub inline fn is_control(self: Opcode) bool {
+        return @intFromEnum(self) >= 0x8;
+    }
 };
 
 // StatusCode - WebSocket connection close status codes
