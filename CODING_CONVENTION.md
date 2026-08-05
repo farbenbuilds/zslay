@@ -97,9 +97,10 @@ const std = @import("std");
 /// This structure crosses the FFI boundary and uses explicit static typing.
 pub const WsFrameHeader = packed struct(u16) {
         fin: bool,
-        opcode: u4,
         reserved: u3,
-        payload_length: u8,
+        opcode: u4,
+        mask: bool,
+        payload_length: u7,
 };
 
 /// zslay_parse_frame_header - Parses the input byte buffer to extract header information.
@@ -113,8 +114,8 @@ pub export fn zslay_parse_frame_header(buffer_ptr: [*]const u8, len: usize) c_in
 
         // All parsing operations must be zero-allocation
         var header: WsFrameHeader = undefined;
-        header.fin = (buffer & 0x80) != 0;
-        header.opcode = @as(u4, @truncate(buffer & 0x0F));
+        header.fin = (buffer[0] & 0x80) != 0;
+        header.opcode = @as(u4, @truncate(buffer[0] & 0x0F));
 
         // Always use static dispatch (switch) instead of function pointers
         switch (header.opcode) {

@@ -4,24 +4,33 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // export zig module for integration
-    const zslay_mod = b.createModule(.{
-        .root_source_file = b.path("src/root.zig"),
+    // export pure Zig module for other Zig projects integration
+    // registered with the name "zslay"
+    const zslay_mod = b.addModule("zslay", .{
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    // build static library
+    _ = zslay_mod;
+
+    // build C-compatible static library through src/c_api.zig
+    // compiles exported symbols with C calling conventions
     const lib = b.addLibrary(.{
         .linkage = .static,
         .name = "zslay",
-        .root_module = zslay_mod,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/c_api.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     // output compiled library
     b.installArtifact(lib);
 
-    // setup local unit tests
+    // setup local unit tests from src/test.zig
+    // executed natively via "zig build test" inside Nix
     const lib_tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/test.zig"),

@@ -1,7 +1,6 @@
 const std = @import("std");
 
-// Opcode - WebSocket frame opcodes defined in RFC 6455
-// explicit u4 backing type is required for ABI safety
+/// WebSocket frame opcodes defined in RFC 6455
 pub const Opcode = enum(u4) {
     continuation = 0x0,
     text = 0x1,
@@ -11,10 +10,13 @@ pub const Opcode = enum(u4) {
     ping = 0x9,
     pong = 0xa,
     _,
+
+    pub inline fn is_control(self: Opcode) bool {
+        return @intFromEnum(self) >= 0x8;
+    }
 };
 
-// StatusCode - WebSocket connection close status codes
-// backing integer prevents implicit tag size generation
+/// WebSocket connection close status codes
 pub const StatusCode = enum(u16) {
     normal_closure = 1000,
     going_away = 1001,
@@ -34,8 +36,7 @@ pub const StatusCode = enum(u16) {
     _,
 };
 
-// Error - pure Zig error set for WebSocket frame parsing
-// bubbled up through Zig return traces for robust errot handling
+/// Pure Zig error set for WebSocket frame parsing
 pub const Error = error{
     InvalidOpcode,
     InvalidLength,
@@ -46,19 +47,17 @@ pub const Error = error{
     PayloadNotMasked,
 };
 
-// FrameHeader - contiguous 16-bit physical layout of a WebSocket header
-// layout mapped from LSB to MSB for natural little-endian u16 loads
+/// Contiguous 16-bit physical layout of a WebSocket header
 pub const FrameHeader = packed struct(u16) {
-    payload_len: u7,
-    mask: bool,
     opcode: u4,
-
     rsv3: bool,
     rsv2: bool,
     rsv1: bool,
     fin: bool,
+
+    payload_len: u7,
+    mask: bool,
 };
 
-// MaskingKey - 4-byte contiguous array used for frame payload XOR masking
-// flat array prevents pointer chasing and cache line evictions
-pub const MaskingKey = [2]u8;
+/// 4-byte contiguous array used for frame payload XOR masking
+pub const MaskingKey = [4]u8;
