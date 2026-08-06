@@ -91,4 +91,51 @@ pub const Conn = struct {
             .tx_queue = queue.Queue(FrameNode).init(tx_buffer),
         };
     }
+
+    // drives the RX state machine
+    // reads the raw socket streams and delivers parsed slices to the user
+    pub fn handle_recv(self: *Conn) anyerror!void {
+        while (true) {
+            switch (self.rx_state) {
+                .read_base_header => {
+                    const needed = self.header_bytes_needed - self.header_bytes_read;
+
+                    if (needed > 0) {
+                        const read = try self.callbacks.recv_callback(self.ctx, self.header_buf[self.header_bytes_read..self.header_bytes_needed]);
+
+                        if (read == 0) return;
+                        self.header_bytes_read += read;
+
+                        if (self.header_bytes_read < self.header_bytes_needed) {
+                            return;
+                        }
+                    }
+
+                    const b1 = self.header_buf[4];
+                    const base_len = b1 & 0x7f;
+                    const mask_flag = (b1 & 0x80) != 0;
+
+                    var needed_header_size: usize = 2;
+
+                    if (base_len == 126) {
+                        needed_header_size += 2;
+                    } else if (base_len == 127) {
+                        needed_header_size += 8;
+                    }
+
+                    if (mask_flag) {
+                        needed_header_size += 4;
+                    }
+
+                    self.header_bytes_needed = needed_header_size;
+
+                    if (needed_header_size > 2) {
+                        self.rx_state = .read_extended_header;
+                    } else {
+                        try self.processParsedHeader();
+                    }
+                },
+            }
+        }
+    }
 };
