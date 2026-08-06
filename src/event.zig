@@ -78,4 +78,17 @@ pub const Conn = struct {
         // maximum possible WebSocket frame header size is 14 bytes
         header_buf: [14]u8 = undefined,
     };
+
+    // initializes a Conn context with the required callbacks and user-provided TX buffer
+    pub fn init(
+        ctx: *anyopaque,
+        callbacks: Callbacks,
+        tx_buffer: []FrameNode,
+    ) Conn {
+        return .{
+            .callbacks = callbacks,
+            .ctx = ctx,
+            .tx_queue = queue.Queue(FrameNode).init(tx_buffer),
+        };
+    }
 };
