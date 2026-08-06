@@ -6,3 +6,8 @@
 .zig-cache/
 zig-out/
 zig-cache/
+
+# build artifacts
+*.o
+*.a
+*.so
