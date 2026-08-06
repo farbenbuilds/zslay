@@ -15,7 +15,7 @@ The repository is organized into distinct files, separating contiguous data layo
 | `wslay_queue.c` / `.h`    | `src/queue.zig`      | **Data-Oriented Queue**: Implements zero-allocation bounded ring buffers or intrusive linked lists, avoiding any heap allocations or dynamic nodes.                                                      |
 | `wslay_event.c` / `.h`    | `src/event.zig`      | **State Machine & High-Level API**: Manages high-level connection lifecycles and schedules callbacks. Operates strictly on pre-allocated static contexts.                                                |
 | _(None - C Native)_       | `src/c_api.zig`      | **C Compatibility Layer**: Exposes C-ABI compatible FFI wrappers (`export fn`) using primitive types, many-item pointers, and opaque contexts for Node.js, Deno, and Rust consumers.                     |
-| _(None)_                  | `src/main.zig`       | **Root Module**: Serves as the primary entry point for the Zig package system, packaging and exporting modules for domestic Zig package manager consumers.                                               |
+| _(None)_                  | `src/root.zig`       | **Root Module**: Serves as the primary entry point for the Zig package system, packaging and exporting modules for domestic Zig package manager consumers.                                               |
 | `tests/` (CUnit)          | `src/test.zig`       | **Native Unit Tests**: Contains Zig-native `test` blocks asserting struct alignments, bit-width mapping, XOR masking math, and state machine invariants.                                                 |
 | `.github/workflows`       | `.github/workflows/` | **CI/CD Pipelines**: Contains GitHub Actions workflows for automated code linting, native Zig testing, Deno-FFI compliance verification, and package publishing.                                         |
 | _(None)_                  | `flake.nix`          | **Nix Development Environment**: Declares the reproducible development environment, pinning the exact Zig 0.16.0 compiler, Deno, and necessary development tools.                                        |
@@ -82,7 +82,7 @@ For FFI boundary and RFC 6455 compliance, we leverage Nix to orchestrate a compl
 
 GitHub Actions automatically spin up a Nix environment on every push and pull request to execute the pipeline:
 
-- **`lint.yml` (Code Style & Formatting)**: Uses Nix-cached linters to enforce the project's 1 Tab (8-space) indentation, line limits, and trailing whitespace rules.
+- **`lint.yml` (Code Style & Formatting)**: Uses Nix-cached linters to enforce standard zig formatting, line limits, and trailing whitespace rules.
 - **`test.yml` (Native Zig Unit Testing)**: Installs Nix, restores cached builds, and executes cross-platform unit tests (`zig build test`) across multiple targets.
 - **`deno-test.yml` (Deno-FFI & Autobahn Compliance)**: Spins up the Deno/Autobahn environment via Nix, compiles the FFI module, and runs the entire compliance suite.
 - **`publish.yml` (Release Packaging & Distribution)**: Triggered by release tags. It uses Nix to cross-compile production-optimized static libraries (`.a` / `.lib`) and shared objects, generates C headers, and uploads assets directly to GitHub Releases.

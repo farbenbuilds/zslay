@@ -6,7 +6,7 @@ pub fn build(b: *std.Build) void {
 
     // export pure Zig module
     _ = b.addModule("zslay", .{
-        .root_source_file = b.path("src/main.zig"),
+        .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });

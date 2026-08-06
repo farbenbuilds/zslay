@@ -12,9 +12,9 @@ For architecture see [CODEBASE.md](CODEBASE.md); for setup, workflows, and relea
 
 ### Formatting
 
-- **Indentation**: Use 1 Tab (equivalent to 8 spaces) per indentation level to strictly follow the Linux Kernel standard and prevent deep nesting [1, 5]. _(Note: You must disable or ignore `zig fmt` for this project, as the default tool enforces 4 spaces)._
+- **Indentation**: Follow the standard `zig fmt` formatting rules (4 spaces).
 - **Line Length**: Maximum 120 characters per line.
-- **Brace Placement**: The opening brace `{` for a function declaration must be on the **next line** [3]. For control flow statements (`if`, `switch`, `while`, `for`), the opening brace must be placed at the **end of the same line** [2].
+- **Brace Placement**: Follow the standard `zig fmt` rules for all brace placements.
 
 ### File Naming
 
@@ -96,35 +96,34 @@ const std = @import("std");
 /// WsFrameHeader - Contains the basic header information of a WebSocket frame.
 /// This structure crosses the FFI boundary and uses explicit static typing.
 pub const WsFrameHeader = packed struct(u16) {
-        fin: bool,
-        reserved: u3,
-        opcode: u4,
-        mask: bool,
-        payload_length: u7,
+    fin: bool,
+    reserved: u3,
+    opcode: u4,
+    mask: bool,
+    payload_length: u7,
 };
 
 /// zslay_parse_frame_header - Parses the input byte buffer to extract header information.
-pub export fn zslay_parse_frame_header(buffer_ptr: [*]const u8, len: usize) c_int
-{
-        const buffer = buffer_ptr[0..len];
+pub export fn zslay_parse_frame_header(buffer_ptr: [*]const u8, len: usize) c_int {
+    const buffer = buffer_ptr[0..len];
 
-        if (buffer.len < 2) {
-                return -1;
-        }
+    if (buffer.len < 2) {
+        return -1;
+    }
 
-        // All parsing operations must be zero-allocation
-        var header: WsFrameHeader = undefined;
-        header.fin = (buffer[0] & 0x80) != 0;
-        header.opcode = @as(u4, @truncate(buffer[0] & 0x0F));
+    // All parsing operations must be zero-allocation
+    var header: WsFrameHeader = undefined;
+    header.fin = (buffer[0] & 0x80) != 0;
+    header.opcode = @as(u4, @truncate(buffer[0] & 0x0F));
 
-        // Always use static dispatch (switch) instead of function pointers
-        switch (header.opcode) {
+    // Always use static dispatch (switch) instead of function pointers
+    switch (header.opcode) {
         1, 2 => {
-                return 0;
+            return 0;
         },
         else => {
-                return -2;
-        }
-        }
+            return -2;
+        },
+    }
 }
 ```
