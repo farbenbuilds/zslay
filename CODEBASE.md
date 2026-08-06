@@ -82,7 +82,7 @@ For FFI boundary and RFC 6455 compliance, we leverage Nix to orchestrate a compl
 
 GitHub Actions automatically spin up a Nix environment on every push and pull request to execute the pipeline:
 
-- **`lint.yml` (Code Style & Formatting)**: Uses Nix-cached linters to enforce the project's 1 Tab (8-space) indentation, line limits, and trailing whitespace rules.
+- **`lint.yml` (Code Style & Formatting)**: Uses Nix-cached linters to enforce standard zig formatting, line limits, and trailing whitespace rules.
 - **`test.yml` (Native Zig Unit Testing)**: Installs Nix, restores cached builds, and executes cross-platform unit tests (`zig build test`) across multiple targets.
 - **`deno-test.yml` (Deno-FFI & Autobahn Compliance)**: Spins up the Deno/Autobahn environment via Nix, compiles the FFI module, and runs the entire compliance suite.
 - **`publish.yml` (Release Packaging & Distribution)**: Triggered by release tags. It uses Nix to cross-compile production-optimized static libraries (`.a` / `.lib`) and shared objects, generates C headers, and uploads assets directly to GitHub Releases.
