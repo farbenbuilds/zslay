@@ -12,7 +12,7 @@ Please describe the changes this PR makes and why it should be merged.
 
 ## Checklist
 
-- [ ] I have read the [Contributing Guidelines](./CONTRIBUTING.md)
+- [ ] I have read the [Contributing Guidelines](../CONTRIBUTE.md)
 - [ ] My code follows the code style of this project
 - [ ] I have run `zig fmt --check .` and all checks pass
 - [ ] I have tested my changes locally
