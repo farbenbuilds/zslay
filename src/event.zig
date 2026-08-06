@@ -45,8 +45,8 @@ pub const Conn = struct {
     // consumer provided state context
     ctx: *anyopaque,
 
-    // queue to store outgoing frames using instrusive doubly-linked list
-    tx_queue: queue.Queue(FrameNode, "link") = queue.Queue(FrameNode, "link").init(),
+    // queue to store outgoing frames using a bounded ring buffer
+    tx_queue: queue.Queue(FrameNode),
 
     // decoded frame header of currently processed incoming frame
     decoded_header: ?frame.DecoderHeader = null,
@@ -67,11 +67,9 @@ pub const Conn = struct {
     // receiver machine parsing state
     rx_state: RxState = .read_base_header,
 
-    // instrusive queue element representing an outgoing frame
-    // allocated out-of-band by the user to guarantee zero-heap usage
+    // ring buffer element representing an outgoing frame
     pub const FrameNode = struct {
         payload: []const u8 = &.{},
-        link: queue.Node(FrameNode) = .{},
 
         header_size: usize = 0,
         sent_header: usize = 0,
