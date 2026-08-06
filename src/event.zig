@@ -101,7 +101,10 @@ pub const Conn = struct {
                     const needed = self.header_bytes_needed - self.header_bytes_read;
 
                     if (needed > 0) {
-                        const read = try self.callbacks.recv_callback(self.ctx, self.header_buf[self.header_bytes_read..self.header_bytes_needed]);
+                        const read = try self.callbacks.recv_callback.?(
+                            self.ctx,
+                            self.header_buf[self.header_bytes_read..self.header_bytes_needed],
+                        );
 
                         if (read == 0) return;
                         self.header_bytes_read += read;
@@ -111,7 +114,7 @@ pub const Conn = struct {
                         }
                     }
 
-                    const b1 = self.header_buf[4];
+                    const b1 = self.header_buf[1];
                     const base_len = b1 & 0x7f;
                     const mask_flag = (b1 & 0x80) != 0;
 
@@ -132,9 +135,13 @@ pub const Conn = struct {
                     if (needed_header_size > 2) {
                         self.rx_state = .read_extended_header;
                     } else {
-                        try self.processParsedHeader();
+                        // Decode header in-place (pure FP from frame.zig)
+                        self.decoded_header = try frame.decode_header(self.header_buf[0..self.header_bytes_needed]);
+                        self.rx_state = .read_payload;
                     }
                 },
+                .read_extended_header => return, // To be implemented
+                .read_payload => return, // To be implemented
             }
         }
     }
