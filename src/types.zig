@@ -1,5 +1,3 @@
-const std = @import("std");
-
 // WebSocket frame opcodes defined in RFC 6455
 pub const Opcode = enum(u4) {
     continuation = 0x0,

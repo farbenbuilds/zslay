@@ -20,16 +20,16 @@ pub const OnFrameCallback = *const fn (
     payload: []const u8,
 ) anyerror!void;
 
-// group of all callbacks provided by the consumer
+// group of all callbacks provided by the consumer (Mandatory callbacks are strictly enforced)
 pub const Callbacks = struct {
-    recv_callback: ?RecvCallback = null,
-    send_callback: ?SendCallback = null,
+    recv_callback: RecvCallback,
+    send_callback: SendCallback,
+    on_frame_callback: OnFrameCallback,
     gen_mask_callback: ?GenMaskCallback = null,
-    on_frame_callback: ?OnFrameCallback = null,
 };
 
 // state of the WebSocket frame receiver machine
-// Explicit u8 backing for compact state tracking and DOD caching
+// explicitly uses u8 backing to keep the state footprint minimal
 pub const RxState = enum(u8) {
     read_base_header = 0,
     read_extended_header = 1,
@@ -39,32 +39,19 @@ pub const RxState = enum(u8) {
 // zero-allocation, I/O-agnostic WebSocket connection context
 // coordinates frame streaming, XOR masking, and instrusive TX queueing
 pub const Conn = struct {
-    // group of all callbacks provided by the consumer
-    callbacks: Callbacks,
-
-    // consumer provided state context
+    // ordered from largest to smallest alignment to avoid memory padding
     ctx: *anyopaque,
-
-    // queue to store outgoing frames using a bounded ring buffer
-    tx_queue: queue.Queue(FrameNode),
-
-    // decoded frame header of currently processed incoming frame
-    decoded_header: ?frame.DecoderHeader = null,
-
-    // bytes of current payload processed so far
     payload_bytes_processed: u64 = 0,
 
-    // total header bytes parsed so far
-    header_bytes_read: usize = 0,
+    callbacks: Callbacks,
+    tx_queue: queue.Queue(FrameNode),
 
-    // current expected physical header size (2 to 14 bytes)
+    header_bytes_read: usize = 0,
     header_bytes_needed: usize = 2,
 
-    // temporary buffer to accumulate and parse incoming frame headers
-    // maximum possible WebSocket frame header size is 14 bytes
-    header_buf: [14]u8 = undefined,
+    decoded_header: ?frame.DecoderHeader = null,
 
-    // receiver machine parsing state
+    header_buf: [14]u8 = undefined,
     rx_state: RxState = .read_base_header,
 
     // ring buffer element representing an outgoing frame
@@ -92,27 +79,29 @@ pub const Conn = struct {
         };
     }
 
+    // DRY abstraction for populating the header buffer
+    inline fn fill_header_buffer(self: *Conn) !bool {
+        const needed = self.header_bytes_needed - self.header_bytes_read;
+        if (needed == 0) return true;
+
+        const read = try self.callbacks.recv_callback(
+            self.ctx,
+            self.header_buf[self.header_bytes_read..self.header_bytes_needed],
+        );
+
+        if (read == 0) return false;
+        self.header_bytes_read += read;
+
+        return self.header_bytes_read == self.header_bytes_needed;
+    }
+
     // drives the RX state machine
     // reads the raw socket streams and delivers parsed slices to the user
     pub fn handle_recv(self: *Conn) anyerror!void {
         while (true) {
             switch (self.rx_state) {
                 .read_base_header => {
-                    const needed = self.header_bytes_needed - self.header_bytes_read;
-
-                    if (needed > 0) {
-                        const read = try self.callbacks.recv_callback.?(
-                            self.ctx,
-                            self.header_buf[self.header_bytes_read..self.header_bytes_needed],
-                        );
-
-                        if (read == 0) return;
-                        self.header_bytes_read += read;
-
-                        if (self.header_bytes_read < self.header_bytes_needed) {
-                            return;
-                        }
-                    }
+                    if (!(try self.fill_header_buffer())) return;
 
                     const b1 = self.header_buf[1];
                     const base_len = b1 & 0x7f;
@@ -122,13 +111,9 @@ pub const Conn = struct {
 
                     if (base_len == 126) {
                         needed_header_size += 2;
-                    } else if (base_len == 127) {
-                        needed_header_size += 8;
-                    }
+                    } else if (base_len == 127) needed_header_size += 8;
 
-                    if (mask_flag) {
-                        needed_header_size += 4;
-                    }
+                    if (mask_flag) needed_header_size += 4;
 
                     self.header_bytes_needed = needed_header_size;
 
@@ -141,21 +126,7 @@ pub const Conn = struct {
                 },
 
                 .read_extended_header => {
-                    const needed = self.header_bytes_needed - self.header_bytes_read;
-
-                    if (needed > 0) {
-                        const read = try self.callbacks.recv_callback.?(
-                            self.ctx,
-                            self.header_buf[self.header_bytes_read..self.header_bytes_needed],
-                        );
-
-                        if (read == 0) return;
-                        self.header_bytes_read += read;
-
-                        if (self.header_bytes_read < self.header_bytes_needed) {
-                            return;
-                        }
-                    }
+                    if (!(try self.fill_header_buffer())) return;
 
                     self.decoded_header = try frame.decode_header(self.header_buf[0..self.header_bytes_needed]);
                     self.rx_state = .read_payload;
@@ -169,7 +140,7 @@ pub const Conn = struct {
                     if (remaining == 0) {
                         const op: types.Opcode = @enumFromInt(dh.header.opcode);
 
-                        try self.callbacks.on_frame_callback.?(
+                        try self.callbacks.on_frame_callback(
                             self.ctx,
                             op,
                             dh.header.fin,
@@ -183,7 +154,7 @@ pub const Conn = struct {
                     var chunk_buf: [4096]u8 = undefined;
                     const chunk_size = @as(usize, @intCast(@min(chunk_buf.len, remaining)));
 
-                    const read = try self.callbacks.recv_callback.?(self.ctx, chunk_buf[0..chunk_size]);
+                    const read = try self.callbacks.recv_callback(self.ctx, chunk_buf[0..chunk_size]);
                     if (read == 0) return;
 
                     if (dh.header.mask) {
@@ -194,7 +165,7 @@ pub const Conn = struct {
 
                     const op: types.Opcode = @enumFromInt(dh.header.opcode);
 
-                    try self.callbacks.on_frame_callback.?(
+                    try self.callbacks.on_frame_callback(
                         self.ctx,
                         op,
                         dh.header.fin,
@@ -202,9 +173,7 @@ pub const Conn = struct {
                     );
 
                     self.payload_bytes_processed += read;
-                    if (self.payload_bytes_processed == total_len) {
-                        self.reset_rx();
-                    }
+                    if (self.payload_bytes_processed == total_len) self.reset_rx();
                 },
             }
         }
@@ -217,7 +186,7 @@ pub const Conn = struct {
 
             if (n.sent_header < n.header_size) {
                 const to_send = n.header_buf[n.sent_header..n.header_size];
-                const sent = try self.callbacks.send_callback.?(self.ctx, to_send);
+                const sent = try self.callbacks.send_callback(self.ctx, to_send);
 
                 if (sent == 0) {
                     try self.tx_queue.push_front(n);
@@ -249,10 +218,10 @@ pub const Conn = struct {
 
                     frame.mask(chunk_buf[0..chunk_size], key, n.sent_payload);
 
-                    sent = try self.callbacks.send_callback.?(self.ctx, chunk_buf[0..chunk_size]);
+                    sent = try self.callbacks.send_callback(self.ctx, chunk_buf[0..chunk_size]);
                 } else {
                     const to_send = n.payload[n.sent_payload .. n.sent_payload + remaining];
-                    sent = try self.callbacks.send_callback.?(self.ctx, to_send);
+                    sent = try self.callbacks.send_callback(self.ctx, to_send);
                 }
 
                 if (sent == 0) {
