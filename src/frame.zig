@@ -1,6 +1,5 @@
 const std = @import("std");
 const types = @import("types.zig");
-const frame = @import("frame.zig");
 
 // Unpacked frame header properties
 pub const DecoderHeader = struct {
@@ -23,7 +22,7 @@ pub fn mask(buf: []u8, masking_key: types.MaskingKey, pos: usize) void {
 
     var i: usize = 0;
 
-    // Wide integer XOR optimization (DOD compliant throughput boost)
+    // Wide integer XOR optimization for bulk masking
     if (buf.len >= @sizeOf(usize)) {
         var wide_key_buf: [@sizeOf(usize)]u8 = undefined;
         for (&wide_key_buf, 0..) |*b, j| b.* = k[j % 4];

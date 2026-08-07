@@ -29,7 +29,7 @@ pub const Callbacks = struct {
 };
 
 // state of the WebSocket frame receiver machine
-// Explicit u8 backing for compact state tracking and DOD caching
+// explicitly uses u8 backing to keep the state footprint minimal
 pub const RxState = enum(u8) {
     read_base_header = 0,
     read_extended_header = 1,
@@ -39,7 +39,7 @@ pub const RxState = enum(u8) {
 // zero-allocation, I/O-agnostic WebSocket connection context
 // coordinates frame streaming, XOR masking, and instrusive TX queueing
 pub const Conn = struct {
-    // Highly optimized DOD struct packing (Largest to smallest alignment)
+    // ordered from largest to smallest alignment to avoid memory padding
     ctx: *anyopaque,
     payload_bytes_processed: u64 = 0,
 
