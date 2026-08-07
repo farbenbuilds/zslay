@@ -1,28 +1,27 @@
-const std = @import("std");
 const types = @import("types.zig");
 const frame = @import("frame.zig");
 const event = @import("event.zig");
 
 // C-style callback for receiving data
-pub const zslay_recv_callback = *const fn (buf: [*]u8, len: usize, user_data: ?*anyopaque) callconv(.c) isize;
+pub const ZslayRecvCallback = *const fn (buf: [*]u8, len: usize, user_data: ?*anyopaque) callconv(.c) isize;
 
 // C-style callback for sending data
-pub const zslay_send_callback = *const fn (buf: [*]const u8, len: usize, user_data: ?*anyopaque) callconv(.c) isize;
+pub const ZslaySendCallback = *const fn (buf: [*]const u8, len: usize, user_data: ?*anyopaque) callconv(.c) isize;
 
 // C-style callback for generating random mask keys
-pub const zslay_gen_mask_callback = *const fn (buf: [*]u8, user_data: ?*anyopaque) callconv(.c) isize;
+pub const ZslayGenMaskCallback = *const fn (buf: [*]u8, user_data: ?*anyopaque) callconv(.c) isize;
 
 // C-style callback invoked when a frame is parsed
-pub const zslay_on_frame_callback = *const fn (opcode: u8, fin: u8, payload: [*]const u8, len: usize, user_data: ?*anyopaque) callconv(.c) void;
+pub const ZslayOnFrameCallback = *const fn (opcode: u8, fin: u8, payload: [*]const u8, len: usize, user_data: ?*anyopaque) callconv(.c) void;
 
 // aggregates C-style callbacks and the target user data pointer
 const CContext = struct {
     user_data: ?*anyopaque,
-    recv_fn: zslay_recv_callback,
-    send_fn: zslay_send_callback,
+    recv_fn: ZslayRecvCallback,
+    send_fn: ZslaySendCallback,
 
-    on_frame_fn: zslay_on_frame_callback,
-    gen_mask_fn: ?zslay_gen_mask_callback,
+    on_frame_fn: ZslayOnFrameCallback,
+    gen_mask_fn: ?ZslayGenMaskCallback,
 };
 
 // private container combining event.Conn and CContext
@@ -93,10 +92,10 @@ pub export fn zslay_frame_node_get_size() usize {
 pub export fn zslay_conn_init(
     mem: *anyopaque,
     user_data: ?*anyopaque,
-    recv_fn: zslay_recv_callback,
-    send_fn: zslay_send_callback,
-    on_frame_fn: zslay_on_frame_callback,
-    gen_mask_fn: ?zslay_gen_mask_callback,
+    recv_fn: ZslayRecvCallback,
+    send_fn: ZslaySendCallback,
+    on_frame_fn: ZslayOnFrameCallback,
+    gen_mask_fn: ?ZslayGenMaskCallback,
     tx_buffer: *anyopaque,
     tx_node_count: usize,
 ) ?*anyopaque {
