@@ -37,9 +37,7 @@ fn recv_bridge(ctx: *anyopaque, buf: []u8) anyerror!usize {
     const c_ctx = &conn_impl.c_ctx;
     const res = c_ctx.recv_fn(buf.ptr, buf.len, c_ctx.user_data);
 
-    if (res < 0) {
-        return error.ProtocolError;
-    }
+    if (res < 0) return error.ProtocolError;
 
     return @intCast(res);
 }
@@ -50,9 +48,7 @@ fn send_bridge(ctx: *anyopaque, buf: []const u8) anyerror!usize {
     const c_ctx = &conn_impl.c_ctx;
     const res = c_ctx.send_fn(buf.ptr, buf.len, c_ctx.user_data);
 
-    if (res < 0) {
-        return error.ProtocolError;
-    }
+    if (res < 0) return error.ProtocolError;
 
     return @intCast(res);
 }
@@ -64,9 +60,7 @@ fn gen_mask_bridge(ctx: *anyopaque, buf: *types.MaskingKey) anyerror!void {
 
     if (c_ctx.gen_mask_fn) |gen| {
         const res = gen(buf, c_ctx.user_data);
-        if (res < 0) {
-            return error.ProtocolError;
-        }
+        if (res < 0) return error.ProtocolError;
     }
 }
 

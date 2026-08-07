@@ -111,13 +111,9 @@ pub const Conn = struct {
 
                     if (base_len == 126) {
                         needed_header_size += 2;
-                    } else if (base_len == 127) {
-                        needed_header_size += 8;
-                    }
+                    } else if (base_len == 127) needed_header_size += 8;
 
-                    if (mask_flag) {
-                        needed_header_size += 4;
-                    }
+                    if (mask_flag) needed_header_size += 4;
 
                     self.header_bytes_needed = needed_header_size;
 
@@ -177,9 +173,7 @@ pub const Conn = struct {
                     );
 
                     self.payload_bytes_processed += read;
-                    if (self.payload_bytes_processed == total_len) {
-                        self.reset_rx();
-                    }
+                    if (self.payload_bytes_processed == total_len) self.reset_rx();
                 },
             }
         }
