@@ -1,3 +1,6 @@
+//! zslay - A pure Zig port of the wslay WebSocket parser library.
+//! This module provides the I/O-agnostic, zero-allocation core API.
+
 // re-exports the public interface for pure Zig applications
 pub const types = @import("types.zig");
 pub const frame = @import("frame.zig");
@@ -32,3 +35,12 @@ pub const RecvCallback = event.RecvCallback;
 pub const SendCallback = event.SendCallback;
 pub const GenMaskCallback = event.GenMaskCallback;
 pub const OnFrameCallback = event.OnFrameCallback;
+
+comptime {
+    // Force analysis of all imported files to ensure there are no syntax errors
+    // or unused variables when the module is built, even if not referenced.
+    _ = types;
+    _ = frame;
+    _ = queue;
+    _ = event;
+}
