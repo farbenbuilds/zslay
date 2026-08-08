@@ -55,8 +55,8 @@ body:
     id: logs-and-dumps
     attributes:
       label: Logs, Stack Traces, or Hex Dumps (if any)
-      description: Paste any build errors, Zig compiler traces, or Autobahn testsuite failures. Please wrap them in code blocks (```).
-      placeholder: E.g. Deno Autobahn case 1.1.3 failure logs...
+      description: Paste any build errors or Zig compiler traces. Please wrap them in code blocks (```).
+      placeholder: E.g. build failure logs...
     validations:
       required: false
   - type: textarea

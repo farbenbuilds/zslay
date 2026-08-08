@@ -10,7 +10,7 @@ This document serves as a persistent context guide for LLMs and AI Agents intera
 - **Zero-allocation:** No dynamic memory allocation during standard parser execution.
 - **Cache-efficient:** Strict adherence to Data-Oriented Design (DOD).
 - **I/O-Agnostic:** Pure state machine implementation without touching network sockets.
-- **FFI-ready:** Drop-in C ABI compatibility for Node.js, Deno, and Rust consumers.
+- **FFI-ready:** Drop-in C ABI compatibility for Node.js, Python, and Rust consumers.
 
 ---
 
@@ -45,8 +45,7 @@ When touching `src/c_api.zig` or `src/types.zig`:
 
 - **Hermetic Builds:** The development environment is strictly pinned using Nix (`flake.nix`). **DO NOT** suggest or write scripts that install global dependencies via `apt`, `brew`, or `npm`. Apply `nix-best-practices` and `nix-hermetic` skills when modifying Nix workflows.
 - **Testing:**
-  - Native logic (XOR math, struct layouts) should be tested via `test` blocks in `src/test.zig` (we will create `src/test.zig` for `zig build test` later).
-  - RFC 6455 compliance and FFI stability are validated via the Autobahn Testsuite and Deno-FFI inside the Nix environment.
+  - Native logic (XOR math, struct layouts) should be tested via `test` blocks in `src/test.zig`.
 - **Formatting:** Comply with standard Zig formatting. Run `zig fmt .` before any commits. The CI pipeline enforces rigorous linting.
 
 ## 4. Codebase Navigation

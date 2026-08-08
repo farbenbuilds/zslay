@@ -10,7 +10,6 @@ For the step-by-step release procedure, see [CONTRIBUTE.md](CONTRIBUTE.md); for 
 | --------------------------------- | ----------------------------------- | ----------------------------------------------- |
 | `.github/workflows/lint.yml`      | Pull request into `main`            | Code formatting check (`zig fmt --check .`)     |
 | `.github/workflows/test.yml`      | Pull request into `main`            | Native Zig unit tests                           |
-| `.github/workflows/deno-test.yml` | Pull request into `main`            | Deno Autobahn compliance testsuite              |
 | `.github/workflows/publish.yml`   | Push of a version tag matching `v*` | Cross-platform build via Nix and GitHub release |
 
 ## Lint Pipeline (`lint.yml`)
@@ -32,13 +31,6 @@ Tests the core parser logic, Data-Oriented Design (DOD) memory layouts, and stat
 - Environment: Nix shell (Zig 0.16.0).
 - Command: `zig build test`
 - Scope: Executes all `test` blocks defined in `src/test.zig` and other Zig source files.
-
-### 2. Deno Autobahn Testsuite (`deno-test.yml`)
-
-Validates strict RFC 6455 WebSocket compliance. Inspired by `uWebSockets`, we use Deno as a lightweight host to run an Autobahn test server/client that wraps our compiled `zslay` core.
-
-- Environment: Deno runtime (`denoland/setup-deno`).
-- Scope: Runs the standard Autobahn testsuite (fuzzing clients/servers) against `zslay` via FFI/bindings. This ensures our framing, control codes, fragmentation, and UTF-8 handling are perfectly compliant under extreme edge cases without memory corruption.
 
 ## Release Pipeline (`publish.yml`)
 
