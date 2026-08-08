@@ -70,13 +70,7 @@ The native unit test suite is executed within the Nix environment via `nix devel
 - Edge cases of the event queue and bounded ring buffers.
 - State transition validation under invalid protocol payloads.
 
-### 3. Deno & Autobahn Compliance Testing
 
-For FFI boundary and RFC 6455 compliance, we leverage Nix to orchestrate a complete Autobahn test harness without requiring manual global software installations:
-
-- The Deno test harness loads the compiled C-ABI library (`.a` / `.so`) within a Nix shell containing the precise Deno version.
-- Nix provisions the necessary testing dependencies (including Deno, Python, and the Autobahn Testsuite CLI).
-- Fuzzing payloads are fed through the FFI boundary to validate UTF-8 validation, fragmentation logic, and control code handling against RFC 6455 edge cases without triggering memory corruption or panics.
 
 ### 4. Automated Workflows (`.github/workflows/`)
 
@@ -84,5 +78,5 @@ GitHub Actions automatically spin up a Nix environment on every push and pull re
 
 - **`lint.yml` (Code Style & Formatting)**: Uses Nix-cached linters to enforce standard zig formatting, line limits, and trailing whitespace rules.
 - **`test.yml` (Native Zig Unit Testing)**: Installs Nix, restores cached builds, and executes cross-platform unit tests (`zig build test`) across multiple targets.
-- **`deno-test.yml` (Deno-FFI & Autobahn Compliance)**: Spins up the Deno/Autobahn environment via Nix, compiles the FFI module, and runs the entire compliance suite.
+
 - **`publish.yml` (Release Packaging & Distribution)**: Triggered by release tags. It uses Nix to cross-compile production-optimized static libraries (`.a` / `.lib`) and shared objects, generates C headers, and uploads assets directly to GitHub Releases.

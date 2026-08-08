@@ -49,7 +49,7 @@ pub const Conn = struct {
     header_bytes_read: usize = 0,
     header_bytes_needed: usize = 2,
 
-    decoded_header: ?frame.DecoderHeader = null,
+    decoded_header: ?frame.DecodedHeader = null,
 
     header_buf: [14]u8 = undefined,
     rx_state: RxState = .read_base_header,
