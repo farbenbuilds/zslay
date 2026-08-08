@@ -12,7 +12,8 @@ pub fn build(b: *std.Build) void {
     });
 
     // build C-compatible static library
-    const lib = b.addStaticLibrary(.{
+    const lib = b.addLibrary(.{
+        .linkage = .static,
         .name = "zslay",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/c_api.zig"),
