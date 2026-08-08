@@ -14,9 +14,9 @@ pub const FrameHeader = types.FrameHeader;
 pub const MaskingKey = types.MaskingKey;
 
 // re-exports frame operations
-pub const DecodedHeader = frame.DecoderHeader;
-pub const decoded_header = frame.decode_header;
-pub const encoded_header = frame.encode_header;
+pub const DecodedHeader = frame.DecodedHeader;
+pub const decode_header = frame.decode_header;
+pub const encode_header = frame.encode_header;
 
 pub const get_serialized_size = frame.get_serialized_size;
 pub const mask = frame.mask;

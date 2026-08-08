@@ -2,7 +2,7 @@ const std = @import("std");
 const types = @import("types.zig");
 
 // Unpacked frame header properties
-pub const DecoderHeader = struct {
+pub const DecodedHeader = struct {
     extended_len: u64,
     header_size: usize,
     masking_key: ?types.MaskingKey,
@@ -87,8 +87,8 @@ pub fn encode_header(buf: []u8, header: types.FrameHeader, extended_len: u64, ma
     return index;
 }
 
-// Parses a raw byte buffer into a DecoderHeader struct
-pub fn decode_header(buf: []const u8) types.Error!DecoderHeader {
+// Parses a raw byte buffer into a DecodedHeader struct
+pub fn decode_header(buf: []const u8) types.Error!DecodedHeader {
     if (buf.len < 2) return error.BufferTooShort;
 
     // Explicit endianness parsing for robust cross-platform decoding
@@ -139,7 +139,7 @@ pub fn decode_header(buf: []const u8) types.Error!DecoderHeader {
         index += 4;
     }
 
-    return DecoderHeader{
+    return DecodedHeader{
         .extended_len = extended_len,
         .header_size = index,
         .masking_key = masking_key,
