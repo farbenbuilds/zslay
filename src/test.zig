@@ -99,3 +99,45 @@ test "Frame: XOR masking (vectorized and scalar paths)" {
     // Ensure identical
     try testing.expectEqualSlices(u8, &[_]u8{ 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99 }, &buf);
 }
+
+test "Benchmark: Ping/Pong throughput" {
+    var buf: [16]u8 = undefined;
+    const header = root.FrameHeader{
+        .opcode = @intFromEnum(root.Opcode.ping),
+        .rsv3 = false,
+        .rsv2 = false,
+        .rsv1 = false,
+        .fin = true,
+        .payload_len = 0,
+        .mask = true,
+    };
+    const key = root.MaskingKey{ 0x1, 0x2, 0x3, 0x4 };
+
+    // Warmup
+    for (0..1_000) |_| {
+        const size = try root.encode_header(&buf, header, 0, key);
+        _ = try root.decode_header(buf[0..size]);
+    }
+
+    const iterations: u64 = 1_000_000;
+    const io = testing.io;
+    const start_ns = std.Io.Timestamp.now(io, .boot).nanoseconds;
+
+    for (0..iterations) |_| {
+        const size = try root.encode_header(&buf, header, 0, key);
+        const decoded = try root.decode_header(buf[0..size]);
+        std.mem.doNotOptimizeAway(decoded);
+    }
+
+    const end_ns = std.Io.Timestamp.now(io, .boot).nanoseconds;
+
+    const elapsed_ns = @as(u64, @intCast(end_ns - start_ns));
+    const elapsed_s = @as(f64, @floatFromInt(elapsed_ns)) / 1_000_000_000.0;
+    const ops_per_sec = @as(f64, @floatFromInt(iterations)) / elapsed_s;
+    const ns_per_op = @as(f64, @floatFromInt(elapsed_ns)) / @as(f64, @floatFromInt(iterations));
+
+    std.debug.print(
+        "\n[Benchmark] Ping/Pong (Encode+Decode): {d:.2} ops/sec ({d:.2} ns/op)\n",
+        .{ ops_per_sec, ns_per_op },
+    );
+}
