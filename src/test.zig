@@ -202,111 +202,56 @@ test "Benchmark: Multi-Session Ping/Pong Throughput & Latency" {
     });
 }
 
-test "Benchmark: Multi-Session 'Hello World' Text Payload" {
-    const io = testing.io;
+test "Fuzz: Random garbage resilience" {
 
-    const num_sessions = 10_000;
-    const iterations_per_session = 100;
-    const total_ops = num_sessions * iterations_per_session;
-    const payload = "hello world";
-    const payload_len = payload.len;
+    // We only need a single context for fuzzing
+    var rx_nodes: [4]root.Conn.FrameNode = undefined;
 
-    // Simulate DOD-friendly session contexts
-    const sessions = try testing.allocator.alloc(root.FrameHeader, num_sessions);
-    defer testing.allocator.free(sessions);
-
-    for (sessions) |*s| {
-        s.* = root.FrameHeader{
-            .opcode = @intFromEnum(root.Opcode.text),
-            .rsv3 = false,
-            .rsv2 = false,
-            .rsv1 = false,
-            .fin = true,
-            .payload_len = payload_len,
-            .mask = true,
-        };
-    }
-
-    const key = root.MaskingKey{ 0x1, 0x2, 0x3, 0x4 };
-    var buf: [64]u8 = undefined;
-
-    // Benchmark tracking
-    const latencies = try testing.allocator.alloc(u64, total_ops);
-    defer testing.allocator.free(latencies);
-
-    const test_start = std.Io.Timestamp.now(io, .boot).nanoseconds;
-
-    var op_idx: usize = 0;
-    for (0..iterations_per_session) |_| {
-        for (sessions) |session| {
-            const op_start = std.Io.Timestamp.now(io, .boot).nanoseconds;
-
-            // 1. Encode header
-            const header_size = try root.encode_header(&buf, session, payload_len, key);
-
-            // 2. Write payload and mask it (simulating sending)
-            @memcpy(buf[header_size .. header_size + payload_len], payload);
-            root.mask(buf[header_size .. header_size + payload_len], key, 0);
-
-            // 3. Decode header (simulating receiving)
-            const decoded = try root.decode_header(buf[0..header_size]);
-
-            // 4. Unmask payload in-place
-            root.mask(buf[header_size .. header_size + payload_len], decoded.masking_key.?, 0);
-
-            std.mem.doNotOptimizeAway(decoded);
-            std.mem.doNotOptimizeAway(buf[header_size]); // ensure payload isn't optimized out
-
-            const op_end = std.Io.Timestamp.now(io, .boot).nanoseconds;
-            latencies[op_idx] = @intCast(op_end - op_start);
-            op_idx += 1;
+    // Create a dummy context to satisfy the callbacks
+    const FuzzContext = struct {
+        fn on_recv(_: *anyopaque, _: []u8) anyerror!usize {
+            return 0;
         }
-    }
-
-    const test_end = std.Io.Timestamp.now(io, .boot).nanoseconds;
-    const elapsed_s = @as(f64, @floatFromInt(test_end - test_start)) / 1_000_000_000.0;
-    const ops_per_sec = @as(f64, @floatFromInt(total_ops)) / elapsed_s;
-
-    // Statistics Calculation
-    const Sorter = struct {
-        fn lessThan(context: void, a: u64, b: u64) bool {
-            _ = context;
-            return a < b;
+        fn on_send(_: *anyopaque, _: []const u8) anyerror!usize {
+            return 0;
         }
+        fn on_frame(_: *anyopaque, _: root.Opcode, _: bool, _: []const u8) anyerror!void {}
     };
-    std.mem.sort(u64, latencies, {}, Sorter.lessThan);
 
-    const min_lat = latencies[0];
-    const max_lat = latencies[latencies.len - 1];
-    const med_lat = latencies[latencies.len / 2];
+    var fuzz_ctx = FuzzContext{};
+    var conn = root.Conn.init(
+        &fuzz_ctx,
+        .{
+            .recv_callback = FuzzContext.on_recv,
+            .send_callback = FuzzContext.on_send,
+            .on_frame_callback = FuzzContext.on_frame,
+            .gen_mask_callback = null,
+        },
+        &rx_nodes,
+    );
 
-    var sum_lat: u64 = 0;
-    for (latencies) |l| sum_lat += l;
-    const avg_lat = @as(f64, @floatFromInt(sum_lat)) / @as(f64, @floatFromInt(latencies.len));
+    // Initialize RNG
+    var prng = std.Random.DefaultPrng.init(0xDEADBEEF);
+    const random = prng.random();
 
-    std.debug.print(
-        \\
-        \\====================================================
-        \\[Benchmark] Multi-Session 'Hello World' Text Payload
-        \\====================================================
-        \\Active WS Sessions : {d}
-        \\Total Operations   : {d}
-        \\Throughput         : {d:.2} ops/sec
-        \\
-        \\Latency / Delay (nanoseconds per frame)
-        \\  Min    : {d} ns
-        \\  Max    : {d} ns
-        \\  Median : {d} ns
-        \\  Avg    : {d:.2} ns
-        \\====================================================
-        \\
-    , .{
-        num_sessions,
-        total_ops,
-        ops_per_sec,
-        min_lat,
-        max_lat,
-        med_lat,
-        avg_lat,
-    });
+    // Run 100,000 iterations of pure random garbage injected directly into the parsing buffer
+    const iterations = 100_000;
+
+    for (0..iterations) |_| {
+        // Reset state machine for the next garbage payload
+        conn.rx_state = .read_base_header;
+        conn.header_bytes_read = 0;
+        conn.header_bytes_needed = 2;
+
+        // Fill header buffer with random noise
+        random.bytes(&conn.header_buf);
+
+        // Attempt to parse it. It SHOULD throw errors (like InvalidOpcode, ProtocolError, etc)
+        // But it MUST NEVER panic, segfault, or OOM.
+        if (conn.handle_recv()) {
+            // It randomly managed to parse a valid frame header by pure luck!
+        } else |_| {
+            // Expected: mostly ProtocolError or BufferTooShort
+        }
+    }
 }
