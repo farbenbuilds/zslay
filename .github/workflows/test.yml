@@ -19,6 +19,7 @@ jobs:
   test:
     name: Checks & Tests
     runs-on: ubuntu-latest
+    environment: Testing
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
