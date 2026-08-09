@@ -1,0 +1,69 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build Artifacts
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: 
+          - default
+          - windows-x86_64
+          - macos-x86_64
+          - macos-aarch64
+          - linux-x86_64-gnu
+          - linux-aarch64-gnu
+          - linux-x86_64-musl
+          - linux-aarch64-musl
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Build target
+        run: nix build .#${{ matrix.target }}
+
+      - name: Rename artifacts
+        run: |
+          mkdir -p dist
+          for file in result/lib/*; do
+            filename=$(basename "$file")
+            name="${filename%.*}"
+            ext="${filename##*.}"
+            cp "$file" "dist/${name}-${{ matrix.target }}.${ext}"
+          done
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: zslay-${{ matrix.target }}
+          path: dist/*
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: artifacts/*

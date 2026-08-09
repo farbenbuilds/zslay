@@ -56,6 +56,34 @@
             '';
           };
       in {
+        formatter = pkgs.alejandra;
+
+        checks =
+          {
+            test-default = pkgs.stdenv.mkDerivation {
+              name = "zslay-test-default";
+              src = ./.;
+              nativeBuildInputs = [zig];
+              buildPhase = ''
+                export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
+                zig build test --summary all
+              '';
+              installPhase = "touch $out";
+            };
+          }
+          // pkgs.lib.optionalAttrs isLinux {
+            test-musl = pkgsMusl.stdenv.mkDerivation {
+              name = "zslay-test-musl";
+              src = ./.;
+              nativeBuildInputs = [zig];
+              buildPhase = ''
+                export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
+                zig build test --summary all
+              '';
+              installPhase = "touch $out";
+            };
+          };
+
         devShells =
           {
             default = mkDevShell pkgs;
