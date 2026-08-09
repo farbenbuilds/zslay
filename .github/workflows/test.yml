@@ -11,9 +11,13 @@ on:
       - '**/*.zig'
       - '**/*.zon'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    name: Run Tests
+    name: Checks & Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -26,5 +30,8 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
-      - name: Run zig build test
-        run: nix develop -c "zig build test --summary all"
+      - name: Check Formatting
+        run: nix develop -c zig fmt --check .
+
+      - name: Run Flake Checks (Native & Musl Tests)
+        run: nix flake check --print-build-logs
