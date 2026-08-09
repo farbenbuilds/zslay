@@ -13,6 +13,7 @@ jobs:
   fmt:
     name: Check Zig Formatting
     runs-on: ubuntu-latest
+    environment: Linting
 
     steps:
       - name: Checkout code
