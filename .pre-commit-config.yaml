@@ -3,3 +3,4 @@ repos:
     rev: main
     hooks:
       - id: zig-fmt
+      - id: zig-build-test
