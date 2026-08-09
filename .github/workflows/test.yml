@@ -30,4 +30,4 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Run zig build test
-        run: nix develop -c zig build test
+        run: nix develop -c "zig build test --summary all"
