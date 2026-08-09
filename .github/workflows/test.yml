@@ -10,9 +10,6 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - '**/*.zig'
-      - '**/*.zon'
 
 jobs:
   test:
