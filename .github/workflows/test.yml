@@ -4,9 +4,15 @@ on:
   push:
     branches:
       - main
+    paths:
+      - '**/*.zig'
+      - '**/*.zon'
   pull_request:
     branches:
       - main
+    paths:
+      - '**/*.zig'
+      - '**/*.zon'
 
 jobs:
   test:
