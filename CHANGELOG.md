@@ -29,4 +29,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - Hardened `test.yml` GitHub Action for production with concurrency cancellation, `nix flake check` execution, and automated `zig fmt --check` gates. Optimized trigger paths to run on all PRs to `main`, while only triggering on direct pushes to `main` if `.zig` or `.zon` files are modified.
-- Upgraded `actions/checkout`, `actions/upload-artifact`, and `actions/download-artifact` to `v7` across CI workflows.
+- Upgraded `actions/checkout` to `v7`, and `actions/upload-artifact`/`actions/download-artifact` to `v8` across CI workflows.
