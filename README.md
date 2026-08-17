@@ -41,7 +41,7 @@ Development is strictly pinned using Nix to guarantee bit-for-bit reproducibilit
 
 **1. Clone the repository**
 ```bash
-git clone https://github.com/your-org/zslay.git
+git clone https://github.com/farbenbuilds/zslay.git
 cd zslay
 ```
 
