@@ -39,21 +39,29 @@ Development is strictly pinned using Nix to guarantee bit-for-bit reproducibilit
 
 ### Clone, Dev, and Build
 
+**1. Clone the repository**
 ```bash
-# Clone the repository
 git clone https://github.com/your-org/zslay.git
 cd zslay
+```
 
-# Enter the hermetic Nix environment (provides Zig 0.16.0 and all tooling)
+**2. Enter the hermetic Nix environment**  
+*(Provides Zig 0.16.0 and all necessary tooling)*
+```bash
 nix develop
-
-# Or, if you use direnv:
+```
+*Or, if you use direnv:*
+```bash
 direnv allow
+```
 
-# Run native tests
+**3. Run native tests**
+```bash
 zig build test
+```
 
-# Format the code
+**4. Format the code**
+```bash
 zig fmt .
 ```
 
