@@ -28,11 +28,6 @@ This project strictly adheres to Data-Oriented Design principles to squeeze out 
 - **Memory Predictability:** By keeping state management outside the library and avoiding heap allocations entirely, `zslay` is completely deterministic in its memory usage.
 - **Secure by Default:** Zig's strict bounds checking guarantees resilience against malformed or malicious WebSocket payloads.
 
-## uWebZockets
-
-`zslay` is designed to be the foundational core of **uWebZockets**, an upcoming implementation of the highly acclaimed `uWebSockets` library, fully written in pure Zig. 
-uWebZockets aims to bring industry-leading concurrency and throughput to the Zig ecosystem, leveraging `zslay`'s zero-allocation protocol parsing at its heart.
-
 ## Getting Started
 
 Development is strictly pinned using Nix to guarantee bit-for-bit reproducibility across all OS platforms. No global dependencies (like apt, brew, or npm) are required.
@@ -61,3 +56,12 @@ zig build test
 # Format the code
 zig fmt .
 ```
+
+## Credits
+
+`zslay` is heavily inspired by and ported from the original C WebSocket library, [wslay](https://github.com/tatsuhiro-t/wslay), created by Tatsuhiro Tsujikawa. We extend our gratitude for their foundational work.
+
+## uWebZockets
+
+`zslay` is designed to be the foundational core of **uWebZockets**, an upcoming implementation of the highly acclaimed `uWebSockets` library, fully written in pure Zig. 
+uWebZockets aims to bring industry-leading concurrency and throughput to the Zig ecosystem, leveraging `zslay`'s zero-allocation protocol parsing at its heart.
