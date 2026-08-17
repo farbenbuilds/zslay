@@ -70,9 +70,7 @@ The native unit test suite is executed within the Nix environment via `nix devel
 - Edge cases of the event queue and bounded ring buffers.
 - State transition validation under invalid protocol payloads.
 
-
-
-### 4. Automated Workflows (`.github/workflows/`)
+### 3. Automated Workflows (`.github/workflows/`)
 
 GitHub Actions automatically spin up a Nix environment on every push and pull request to execute the pipeline:
 

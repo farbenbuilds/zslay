@@ -37,4 +37,8 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run unit tests for zslay");
     test_step.dependOn(&run_lib_tests.step);
+
+    const check_step = b.step("check", "Run semantic linter");
+    check_step.dependOn(&lib.step);
+    check_step.dependOn(&lib_tests.step);
 }
