@@ -105,6 +105,7 @@ Example: `feat(core): implement dod frame header packed struct`
 Full pipeline reference: [CI_CD_PIPELINE.md](CI_CD_PIPELINE.md).
 
 - Lint (`lint.yml`): runs `zig fmt --check .` on every pull request into `main` modifying `.zig`, `.zon`, or `build.zig` files (Ubuntu, Zig 0.16.0).
+- Test (`test.yml`): runs `zig build test` natively inside a Nix environment on every pull request and push to main.
 - Release (`publish.yml`): triggered by pushing a version tag matching `v*` (e.g. `v0.1.0`).
   Uses Nix `flake-parts` to cross-compile the static library (`.a` / `.lib`) across multiple targets (Linux glibc/musl, macOS, Windows), creates the GitHub release named after the tag with notes extracted from the matching `CHANGELOG.md` section, and uploads the compiled artifacts to the release.
 
