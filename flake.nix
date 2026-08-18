@@ -31,7 +31,7 @@
 
         mkDevShell = p:
           p.mkShell {
-            buildInputs = [
+            packages = [
               zig
               pkgs.zls
               pkgs.gnutar
