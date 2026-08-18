@@ -55,12 +55,17 @@ nix develop
 direnv allow
 ```
 
-**3. Run native tests**
+**3. Install pre-commit hooks (Optional but recommended)**
+```bash
+pre-commit install
+```
+
+**4. Run native tests**
 ```bash
 zig build test
 ```
 
-**4. Format the code**
+**5. Format the code**
 ```bash
 zig fmt .
 ```
