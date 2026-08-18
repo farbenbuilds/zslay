@@ -43,8 +43,6 @@ jobs:
               name="${filename%.*}"
               ext="${filename##*.}"
               
-              cp "$file" "dist/${name}-${{ matrix.target }}.${ext}"
-              
               # Standardize the archive name to always start with zslay instead of libzslay
               archivename="zslay-${{ matrix.target }}"
               
