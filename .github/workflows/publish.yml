@@ -45,15 +45,12 @@ jobs:
               
               cp "$file" "dist/${name}-${{ matrix.target }}.${ext}"
               
-              cd result/lib
-              
               # Standardize the archive name to always start with zslay instead of libzslay
               archivename="zslay-${{ matrix.target }}"
               
-              tar -cjf "../../dist/${archivename}.tar.bz2" "$filename"
-              tar -czf "../../dist/${archivename}.tar.gz" "$filename"
-              tar -cJf "../../dist/${archivename}.tar.xz" "$filename"
-              cd ../..
+              tar -cjf "dist/${archivename}.tar.bz2" -C result/lib "$filename"
+              tar -czf "dist/${archivename}.tar.gz" -C result/lib "$filename"
+              tar -cJf "dist/${archivename}.tar.xz" -C result/lib "$filename"
             done
           '
 
