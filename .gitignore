@@ -11,3 +11,4 @@ zig-cache/
 *.o
 *.a
 *.so
+result

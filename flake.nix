@@ -38,6 +38,7 @@
               p.bzip2
               p.gzip
               p.xz
+              p.zip
             ];
           };
 
