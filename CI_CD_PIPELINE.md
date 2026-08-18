@@ -34,7 +34,7 @@ Tests the core parser logic, Data-Oriented Design (DOD) memory layouts, and stat
 
 ## Release Pipeline (`publish.yml`)
 
-Triggered by pushing a semver tag such as `v0.1.0`. Releases are driven by tags, not by pushes to `main`.
+Triggered by pushing a semver tag such as `v0.1.2-alpha`. Releases are driven by tags, not by pushes to `main`.
 
 Because we use `flake.nix`, a **single `ubuntu-latest` runner** compiles artifacts for all platforms natively, removing the need for expensive and slow macOS or Windows CI runners.
 
@@ -42,8 +42,8 @@ Because we use `flake.nix`, a **single `ubuntu-latest` runner** compiles artifac
 
 1. Checkout repository.
 2. Setup Nix (with `flake-parts`) and Zig 0.16.0.
-3. Derives the version from the tag (`v0.1.0` becomes `0.1.0`).
-4. Extracts the release notes from the matching `## [0.1.0]` section of `CHANGELOG.md`.
+3. Derives the version from the tag (`v0.1.2-alpha` becomes `0.1.2-alpha`).
+4. Extracts the release notes from the matching `## [0.1.2-alpha]` section of `CHANGELOG.md`.
 5. Calls `nix build` sequentially for the targets defined in `flake.nix`:
    - `linux-x86_64-gnu` -> outputs `libzslay-x86_64-linux-gnu.a` (along with `.tar.bz2`, `.tar.gz`, `.tar.xz` archives)
    - `linux-x86_64-musl` -> outputs `libzslay-x86_64-linux-musl.a` (along with `.tar.bz2`, `.tar.gz`, `.tar.xz` archives)
