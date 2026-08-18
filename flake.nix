@@ -33,11 +33,11 @@
           p.mkShell {
             packages = [
               zig
-              pkgs.zls
-              pkgs.gnutar
-              pkgs.bzip2
-              pkgs.gzip
-              pkgs.xz
+              p.zls
+              p.gnutar
+              p.bzip2
+              p.gzip
+              p.xz
             ];
           };
 
