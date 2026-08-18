@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.3-alpha] - 2026-08-18
+
+### Changed
+
+- Exclude raw static libraries (`.a` / `.lib`) from GitHub Releases, distributing exclusively via standardized `.tar.gz`, `.tar.bz2`, and `.tar.xz` archives.
+- Fix Nix store symlink resolution for CI packaging and enforce proper scope for musl/glibc dev environments.
+
 ## [0.1.1-alpha] - 2026-08-18
 
 ### Added
