@@ -1,6 +1,6 @@
 .{
     .name = .zslay,
-    .version = "0.0.0",
+    .version = "0.1.1-alpha",
     .fingerprint = 0x1838a13b7c881f38,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{},

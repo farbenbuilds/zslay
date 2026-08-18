@@ -34,15 +34,24 @@ jobs:
       - name: Build target
         run: nix build .#${{ matrix.target }}
 
-      - name: Rename artifacts
+      - name: Package artifacts
         run: |
           mkdir -p dist
-          for file in result/lib/*; do
-            filename=$(basename "$file")
-            name="${filename%.*}"
-            ext="${filename##*.}"
-            cp "$file" "dist/${name}-${{ matrix.target }}.${ext}"
-          done
+          nix shell nixpkgs#gnutar nixpkgs#bzip2 nixpkgs#gzip nixpkgs#xz -c bash -c '
+            for file in result/lib/*; do
+              filename=$(basename "$file")
+              name="${filename%.*}"
+              ext="${filename##*.}"
+              
+              cp "$file" "dist/${name}-${{ matrix.target }}.${ext}"
+              
+              cd result/lib
+              tar -cjf "../../dist/${name}-${{ matrix.target }}.${ext}.tar.bz2" "$filename"
+              tar -czf "../../dist/${name}-${{ matrix.target }}.${ext}.tar.gz" "$filename"
+              tar -cJf "../../dist/${name}-${{ matrix.target }}.${ext}.tar.xz" "$filename"
+              cd ../..
+            done
+          '
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
