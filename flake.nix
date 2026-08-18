@@ -31,9 +31,13 @@
 
         mkDevShell = p:
           p.mkShell {
-            buildInputs = [
+            packages = [
               zig
-              pkgs.zls
+              p.zls
+              p.gnutar
+              p.bzip2
+              p.gzip
+              p.xz
             ];
           };
 

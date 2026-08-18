@@ -77,4 +77,4 @@ GitHub Actions automatically spin up a Nix environment on every push and pull re
 - **`lint.yml` (Code Style & Formatting)**: Uses Nix-cached linters to enforce standard zig formatting, line limits, and trailing whitespace rules.
 - **`test.yml` (Native Zig Unit Testing)**: Installs Nix, restores cached builds, and executes cross-platform unit tests (`zig build test`) across multiple targets.
 
-- **`publish.yml` (Release Packaging & Distribution)**: Triggered by release tags. It uses Nix to cross-compile production-optimized static libraries (`.a` / `.lib`) and shared objects, generates C headers, and uploads assets directly to GitHub Releases.
+- **`publish.yml` (Release Packaging & Distribution)**: Triggered by release tags. It uses Nix to cross-compile production-optimized static libraries (`.a` / `.lib`), generates cross-platform archives (`.tar.bz2`, `.tar.gz`, `.tar.xz`) using tools directly from `flake.nix`, and uploads assets directly to GitHub Releases.
