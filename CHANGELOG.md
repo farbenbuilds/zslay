@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Exclude raw static libraries (`.a` / `.lib`) from GitHub Releases, distributing exclusively via standardized `.tar.gz`, `.tar.bz2`, and `.tar.xz` archives.
+- Exclude raw static libraries (`.a` / `.lib`) from GitHub Releases, distributing exclusively via standardized `.tar.gz`, `.tar.bz2`, and `.tar.xz` archives. Windows targets are now packaged into standard `.zip` files instead of tarballs.
 - Fix Nix store symlink resolution for CI packaging and enforce proper scope for musl/glibc dev environments.
 - Update `CI_CD_PIPELINE.md` and `CONTRIBUTE.md` to accurately document the new hermetic tarball packaging procedures and exclusively outputted artifacts.
 

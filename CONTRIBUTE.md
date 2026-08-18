@@ -107,7 +107,7 @@ Full pipeline reference: [CI_CD_PIPELINE.md](CI_CD_PIPELINE.md).
 - Lint (`lint.yml`): runs `zig fmt --check .` on every pull request into `main` modifying `.zig`, `.zon`, or `build.zig` files (Ubuntu, Zig 0.16.0).
 - Test (`test.yml`): runs `zig build test` natively inside a Nix environment on every pull request and push to main.
 - Release (`publish.yml`): triggered by pushing a version tag matching `v*` (e.g. `v0.1.0`).
-  Uses Nix `flake-parts` to cross-compile the static library (`.a` / `.lib`) across multiple targets (Linux glibc/musl, macOS, Windows), exclusively packages them into archives (`.tar.bz2`, `.tar.gz`, `.tar.xz`) natively using the `flake.nix` dev shell, creates the GitHub release named after the tag with notes extracted from the matching `CHANGELOG.md` section, and uploads the generated tarball archives to the release.
+  Uses Nix `flake-parts` to cross-compile the static library (`.a` / `.lib`) across multiple targets (Linux glibc/musl, macOS, Windows), exclusively packages Linux/macOS targets into tarballs (`.tar.bz2`, `.tar.gz`, `.tar.xz`) and Windows targets into `.zip` natively using the `flake.nix` dev shell, creates the GitHub release named after the tag with notes extracted from the matching `CHANGELOG.md` section, and uploads the generated archives to the release.
 
 ## Cutting a Release
 

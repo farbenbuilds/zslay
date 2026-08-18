@@ -52,7 +52,7 @@ Because we use `flake.nix`, a **single `ubuntu-latest` runner** compiles artifac
    - `macos-x86_64` -> builds `libzslay-x86_64-macos.a`
    - `macos-aarch64` -> builds `libzslay-aarch64-macos.a`
    - `windows-x86_64` -> builds `zslay-x86_64-windows.lib`
-6. Packages these artifacts exclusively into cross-platform archives (`.tar.bz2`, `.tar.gz`, `.tar.xz`) utilizing hermetic tools (`gnutar`, `bzip2`, `gzip`, `xz`) provided via `flake.nix` dev shells. The raw `.a`/`.lib` files are strictly omitted from the payload.
+6. Packages Linux and macOS artifacts exclusively into cross-platform archives (`.tar.bz2`, `.tar.gz`, `.tar.xz`) utilizing hermetic tools (`gnutar`, `bzip2`, `gzip`, `xz`). Windows targets are packaged into `.zip` archives utilizing the `zip` tool. All tools are provided via `flake.nix` dev shells. The raw `.a`/`.lib` files are strictly omitted from the payload.
 7. Creates (or updates) the GitHub Release named after the tag and uploads the generated tarball archives.
 
 ## Required Secrets
