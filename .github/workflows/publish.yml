@@ -37,7 +37,7 @@ jobs:
       - name: Package artifacts
         run: |
           mkdir -p dist
-          nix shell nixpkgs#gnutar nixpkgs#bzip2 nixpkgs#gzip nixpkgs#xz -c bash -c '
+          nix develop .#default -c bash -c '
             for file in result/lib/*; do
               filename=$(basename "$file")
               name="${filename%.*}"

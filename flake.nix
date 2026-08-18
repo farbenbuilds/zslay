@@ -34,6 +34,10 @@
             buildInputs = [
               zig
               pkgs.zls
+              pkgs.gnutar
+              pkgs.bzip2
+              pkgs.gzip
+              pkgs.xz
             ];
           };
 
