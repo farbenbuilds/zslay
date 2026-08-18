@@ -106,8 +106,8 @@ Full pipeline reference: [CI_CD_PIPELINE.md](CI_CD_PIPELINE.md).
 
 - Lint (`lint.yml`): runs `zig fmt --check .` on every pull request into `main` modifying `.zig`, `.zon`, or `build.zig` files (Ubuntu, Zig 0.16.0).
 - Test (`test.yml`): runs `zig build test` natively inside a Nix environment on every pull request and push to main.
-- Release (`publish.yml`): triggered by pushing a version tag matching `v*` (e.g. `v0.1.2-alpha`).
-  Uses Nix `flake-parts` to cross-compile the static library (`.a` / `.lib`) across multiple targets (Linux glibc/musl, macOS, Windows), packages them into archives (`.tar.bz2`, `.tar.gz`, `.tar.xz`) natively using the `flake.nix` dev shell, creates the GitHub release named after the tag with notes extracted from the matching `CHANGELOG.md` section, and uploads the compiled artifacts to the release.
+- Release (`publish.yml`): triggered by pushing a version tag matching `v*` (e.g. `v0.1.0`).
+  Uses Nix `flake-parts` to cross-compile the static library (`.a` / `.lib`) across multiple targets (Linux glibc/musl, macOS, Windows), exclusively packages them into archives (`.tar.bz2`, `.tar.gz`, `.tar.xz`) natively using the `flake.nix` dev shell, creates the GitHub release named after the tag with notes extracted from the matching `CHANGELOG.md` section, and uploads the generated tarball archives to the release.
 
 ## Cutting a Release
 
@@ -115,13 +115,13 @@ Releases follow semantic versioning and are driven by `v*` tags, not by pushes t
 
 1. Bump the version in `build.zig.zon`.
 2. Add a `## [x.y.z]` section to `CHANGELOG.md`; the workflow extracts the release notes
-   from it (tag `v0.1.2-alpha` maps to section `## [0.1.2-alpha]`).
+   from it (tag `v0.1.0` maps to section `## [0.1.0]`).
 3. Land the bump on `main` through a pull request.
 4. Tag the release commit and push the tag:
 
 ```bash
-git tag v0.1.2-alpha
-git push origin v0.1.2-alpha
+git tag v0.1.0
+git push origin v0.1.0
 
 ```
 
