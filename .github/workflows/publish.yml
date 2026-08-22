@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: 
+        target:
           - default
           - windows-x86_64
           - macos-x86_64
@@ -42,10 +42,10 @@ jobs:
               filename=$(basename "$file")
               name="${filename%.*}"
               ext="${filename##*.}"
-              
+
               # Standardize the archive name to always start with zslay instead of libzslay
               archivename="zslay-${{ matrix.target }}"
-              
+
               if [[ "${{ matrix.target }}" == windows-* ]]; then
                 zip -j "dist/${archivename}.zip" "result/lib/$filename"
               else

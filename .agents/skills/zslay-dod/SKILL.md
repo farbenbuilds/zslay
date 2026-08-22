@@ -1,7 +1,7 @@
 ---
 name: zslay-dod
 description: >
-  Data-Oriented Design (DOD) constraints for the zslay project. 
+  Data-Oriented Design (DOD) constraints for the zslay project.
   Use when writing core parser logic, structs, or state machines.
 ---
 

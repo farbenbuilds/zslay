@@ -4,7 +4,7 @@ This document serves as a persistent context guide for LLMs and AI Agents intera
 
 ## 1. Project Overview
 
-`zslay` is a pure Zig (version 0.16.0) port of the C-based `wslay` library. It acts as a highly optimized, memory-safe, and I/O-agnostic core for parsing WebSocket (RFC 6455) frames. When replicating logic from the original C codebase, adhere to the `wslay-porting` skill. 
+`zslay` is a pure Zig (version 0.16.0) port of the C-based `wslay` library. It acts as a highly optimized, memory-safe, and I/O-agnostic core for parsing WebSocket (RFC 6455) frames. When replicating logic from the original C codebase, adhere to the `wslay-porting` skill.
 
 **Primary Goals:**
 - **Zero-allocation:** No dynamic memory allocation during standard parser execution.

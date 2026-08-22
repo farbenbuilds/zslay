@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         ## Bug Report
-        Thank you for reporting an issue in **zslay**. 
+        Thank you for reporting an issue in **zslay**.
         *Note: If this is a memory safety issue (out-of-bounds read, use-after-free) or a parser panic, please use the `Security Vulnerability` template instead.*
   - type: input
     id: bug-description
