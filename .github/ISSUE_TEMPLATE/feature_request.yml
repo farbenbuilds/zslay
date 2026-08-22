@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         ## Feature Request
-        Thank you for contributing to **zslay**! 
+        Thank you for contributing to **zslay**!
 
         *Please note that all new features must adhere to our core philosophy: **zero hidden allocations, I/O-agnostic design, and strict C-ABI compatibility**.*
   - type: input
