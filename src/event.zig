@@ -3,33 +3,21 @@ const types = @import("types.zig");
 const frame = @import("frame.zig");
 const queue = @import("queue.zig");
 
-// invoked to read raw data from underlying transport
-pub const RecvCallback = *const fn (ctx: *anyopaque, buf: []u8) anyerror!usize;
-
-// invoked to write raw serialized data to the transport
-pub const SendCallback = *const fn (ctx: *anyopaque, buf: []const u8) anyerror!usize;
-
-// invoked to populate a 4-byte WebSocket masking key
-pub const GenMaskCallback = *const fn (ctx: *anyopaque, buf: *types.MaskingKey) anyerror!void;
-
-// invoked when a WebSocket frame is successfully parsed
-pub const OnFrameCallback = *const fn (
-    ctx: *anyopaque,
-    opcode: types.Opcode,
-    fin: bool,
-    payload: []const u8,
-) anyerror!void;
-
-// group of all callbacks provided by the consumer (Mandatory callbacks are strictly enforced)
-pub const Callbacks = struct {
-    recv_callback: RecvCallback,
-    send_callback: SendCallback,
-    on_frame_callback: OnFrameCallback,
-    gen_mask_callback: ?GenMaskCallback = null,
+// Explicitly backing the action enums with u8 to keep state small
+// This replaces vtable/callbacks with DOD static dispatch.
+pub const RxAction = enum(u8) {
+    need_header = 0,
+    need_payload = 1,
+    emit_frame = 2,
+    _,
 };
 
-// state of the WebSocket frame receiver machine
-// explicitly uses u8 backing to keep the state footprint minimal
+pub const TxAction = enum(u8) {
+    write_header = 0,
+    write_payload = 1,
+    _,
+};
+
 pub const RxState = enum(u8) {
     read_base_header = 0,
     read_extended_header = 1,
@@ -39,11 +27,8 @@ pub const RxState = enum(u8) {
 // zero-allocation, I/O-agnostic WebSocket connection context
 // coordinates frame streaming, XOR masking, and instrusive TX queueing
 pub const Conn = struct {
-    // ordered from largest to smallest alignment to avoid memory padding
-    ctx: *anyopaque,
     payload_bytes_processed: u64 = 0,
 
-    callbacks: Callbacks,
     tx_queue: queue.Queue(FrameNode),
 
     header_bytes_read: usize = 0,
@@ -66,177 +51,93 @@ pub const Conn = struct {
         header_buf: [14]u8 = undefined,
     };
 
-    // initializes a Conn context with the required callbacks and user-provided TX buffer
-    pub fn init(
-        ctx: *anyopaque,
-        callbacks: Callbacks,
-        tx_buffer: []FrameNode,
-    ) Conn {
+    // initializes a Conn context with the user-provided TX buffer
+    pub fn init(tx_buffer: []FrameNode) Conn {
         return .{
-            .callbacks = callbacks,
-            .ctx = ctx,
             .tx_queue = queue.Queue(FrameNode).init(tx_buffer),
         };
     }
 
-    // DRY abstraction for populating the header buffer
-    inline fn fill_header_buffer(self: *Conn) !bool {
-        const needed = self.header_bytes_needed - self.header_bytes_read;
-        if (needed == 0) return true;
-
-        const read = try self.callbacks.recv_callback(
-            self.ctx,
-            self.header_buf[self.header_bytes_read..self.header_bytes_needed],
-        );
-
-        if (read == 0) return false;
-        self.header_bytes_read += read;
-
-        return self.header_bytes_read == self.header_bytes_needed;
-    }
-
     // drives the RX state machine
-    // reads the raw socket streams and delivers parsed slices to the user
-    pub fn handle_recv(self: *Conn) anyerror!void {
-        while (true) {
-            switch (self.rx_state) {
-                .read_base_header => {
-                    if (!(try self.fill_header_buffer())) return;
+    // returns the next required action to the caller
+    pub fn advance_rx(self: *Conn) types.Error!RxAction {
+        switch (self.rx_state) {
+            .read_base_header => {
+                if (self.header_bytes_read < self.header_bytes_needed) return RxAction.need_header;
 
-                    const b1 = self.header_buf[1];
-                    const base_len = b1 & 0x7f;
-                    const mask_flag = (b1 & 0x80) != 0;
+                const b1 = self.header_buf[1];
+                const base_len = b1 & 0x7f;
+                const mask_flag = (b1 & 0x80) != 0;
 
-                    var needed_header_size: usize = 2;
+                var needed: usize = 2;
+                if (base_len == 126) {
+                    needed += 2;
+                } else if (base_len == 127) needed += 8;
 
-                    if (base_len == 126) {
-                        needed_header_size += 2;
-                    } else if (base_len == 127) needed_header_size += 8;
+                if (mask_flag) needed += 4;
+                self.header_bytes_needed = needed;
 
-                    if (mask_flag) needed_header_size += 4;
-
-                    self.header_bytes_needed = needed_header_size;
-
-                    if (needed_header_size > 2) {
-                        self.rx_state = .read_extended_header;
-                    } else {
-                        self.decoded_header = try frame.decode_header(self.header_buf[0..self.header_bytes_needed]);
-                        self.rx_state = .read_payload;
-                    }
-                },
-
-                .read_extended_header => {
-                    if (!(try self.fill_header_buffer())) return;
-
+                if (needed > 2) {
+                    self.rx_state = .read_extended_header;
+                    return RxAction.need_header;
+                } else {
                     self.decoded_header = try frame.decode_header(self.header_buf[0..self.header_bytes_needed]);
                     self.rx_state = .read_payload;
-                },
+                    return self.advance_rx();
+                }
+            },
+            .read_extended_header => {
+                if (self.header_bytes_read < self.header_bytes_needed) return RxAction.need_header;
 
-                .read_payload => {
-                    const dh = self.decoded_header orelse return error.ProtocolError;
-                    const total_len = dh.extended_len;
-                    const remaining = total_len - self.payload_bytes_processed;
+                self.decoded_header = try frame.decode_header(self.header_buf[0..self.header_bytes_needed]);
+                self.rx_state = .read_payload;
+                return self.advance_rx();
+            },
+            .read_payload => {
+                const dh = self.decoded_header orelse return error.ProtocolError;
+                const remaining = dh.extended_len - self.payload_bytes_processed;
 
-                    if (remaining == 0) {
-                        const op: types.Opcode = @enumFromInt(dh.header.opcode);
-
-                        try self.callbacks.on_frame_callback(
-                            self.ctx,
-                            op,
-                            dh.header.fin,
-                            &.{},
-                        );
-
-                        self.reset_rx();
-                        continue;
-                    }
-
-                    var chunk_buf: [4096]u8 = undefined;
-                    const chunk_size = @as(usize, @intCast(@min(chunk_buf.len, remaining)));
-
-                    const read = try self.callbacks.recv_callback(self.ctx, chunk_buf[0..chunk_size]);
-                    if (read == 0) return;
-
-                    if (dh.header.mask) {
-                        if (dh.masking_key) |key| {
-                            frame.mask(chunk_buf[0..read], key, @intCast(self.payload_bytes_processed));
-                        }
-                    }
-
-                    const op: types.Opcode = @enumFromInt(dh.header.opcode);
-
-                    try self.callbacks.on_frame_callback(
-                        self.ctx,
-                        op,
-                        dh.header.fin,
-                        chunk_buf[0..read],
-                    );
-
-                    self.payload_bytes_processed += read;
-                    if (self.payload_bytes_processed == total_len) self.reset_rx();
-                },
-            }
+                if (remaining == 0) return RxAction.emit_frame;
+                return RxAction.need_payload;
+            },
         }
     }
 
-    // transmits headers and masked payload slices in non-blocking chunks
-    pub fn handle_send(self: *Conn) anyerror!void {
-        while (self.tx_queue.pop_front()) |node| {
-            var n = node; // process by value
+    pub fn complete_frame(self: *Conn) void {
+        self.rx_state = .read_base_header;
+        self.header_bytes_read = 0;
+        self.header_bytes_needed = 2;
+        self.decoded_header = null;
+        self.payload_bytes_processed = 0;
+    }
 
-            if (n.sent_header < n.header_size) {
-                const to_send = n.header_buf[n.sent_header..n.header_size];
-                const sent = try self.callbacks.send_callback(self.ctx, to_send);
+    pub fn get_header_buffer(self: *Conn) []u8 {
+        return self.header_buf[self.header_bytes_read..self.header_bytes_needed];
+    }
 
-                if (sent == 0) {
-                    try self.tx_queue.push_front(n);
-                    return;
-                }
+    pub fn advance_header_read(self: *Conn, bytes: usize) void {
+        self.header_bytes_read += bytes;
+    }
 
-                n.sent_header += sent;
+    // transmits headers and masked payload slices
+    pub fn advance_tx(self: *Conn) ?TxAction {
+        const node = self.tx_queue.buffer[self.tx_queue.head]; // peek
+        if (self.tx_queue.len == 0) return null;
 
-                if (n.sent_header < n.header_size) {
-                    try self.tx_queue.push_front(n);
-                    return;
-                }
-            }
+        if (node.sent_header < node.header_size) return TxAction.write_header;
+        if (node.sent_payload < node.payload.len) return TxAction.write_payload;
 
-            if (n.sent_payload < n.payload.len) {
-                const remaining = n.payload.len - n.sent_payload;
-                const b1 = n.header_buf[1];
-                const is_masked = (b1 & 0x80) != 0;
+        _ = self.tx_queue.pop_front();
+        return self.advance_tx();
+    }
 
-                var sent: usize = 0;
-                if (is_masked) {
-                    var chunk_buf: [4096]u8 = undefined;
-                    const chunk_size = @as(usize, @intCast(@min(chunk_buf.len, remaining)));
-                    @memcpy(chunk_buf[0..chunk_size], n.payload[n.sent_payload .. n.sent_payload + chunk_size]);
+    pub fn get_tx_header_buffer(self: *Conn) []const u8 {
+        const node = self.tx_queue.buffer[self.tx_queue.head];
+        return node.header_buf[node.sent_header..node.header_size];
+    }
 
-                    var key: types.MaskingKey = undefined;
-                    const key_index = n.header_size - 4;
-                    @memcpy(&key, n.header_buf[key_index .. key_index + 4]);
-
-                    frame.mask(chunk_buf[0..chunk_size], key, n.sent_payload);
-
-                    sent = try self.callbacks.send_callback(self.ctx, chunk_buf[0..chunk_size]);
-                } else {
-                    const to_send = n.payload[n.sent_payload .. n.sent_payload + remaining];
-                    sent = try self.callbacks.send_callback(self.ctx, to_send);
-                }
-
-                if (sent == 0) {
-                    try self.tx_queue.push_front(n);
-                    return;
-                }
-
-                n.sent_payload += sent;
-
-                if (n.sent_payload < n.payload.len) {
-                    try self.tx_queue.push_front(n);
-                    return;
-                }
-            }
-        }
+    pub fn advance_tx_header(self: *Conn, bytes: usize) void {
+        self.tx_queue.buffer[self.tx_queue.head].sent_header += bytes;
     }
 
     // pushes an outgoing FrameNode into transmission queue
@@ -246,29 +147,17 @@ pub const Conn = struct {
 
     // pure function that builds a frame header and returns a new FrameNode
     pub fn prepare_frame(
-        self: *Conn,
         fin: bool,
         opcode: types.Opcode,
         payload: []const u8,
         is_masked: bool,
+        masking_key_opt: ?types.MaskingKey,
     ) !FrameNode {
         var node = FrameNode{
             .payload = payload,
         };
 
-        var masking_key: ?types.MaskingKey = null;
-
-        if (is_masked) {
-            var key: types.MaskingKey = undefined;
-
-            if (self.callbacks.gen_mask_callback) |gen| {
-                try gen(self.ctx, &key);
-            } else {
-                key = [_]u8{ 0, 0, 0, 0 };
-            }
-
-            masking_key = key;
-        }
+        const key = if (is_masked) (masking_key_opt orelse [_]u8{ 0, 0, 0, 0 }) else null;
 
         const base_len: u7 = if (payload.len < 126) @intCast(payload.len) else if (payload.len <= 65535) 126 else 127;
         const header_struct = types.FrameHeader{
@@ -286,21 +175,10 @@ pub const Conn = struct {
             &node.header_buf,
             header_struct,
             payload.len,
-            masking_key,
+            key,
         );
 
         node.header_size = header_size;
-
         return node;
-    }
-
-    // restores the receiver state to parse the next frame
-    fn reset_rx(self: *Conn) void {
-        self.rx_state = .read_base_header;
-        self.header_bytes_read = 0;
-        self.header_bytes_needed = 2;
-
-        self.decoded_header = null;
-        self.payload_bytes_processed = 0;
     }
 };

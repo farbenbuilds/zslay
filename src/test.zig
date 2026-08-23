@@ -203,32 +203,9 @@ test "Benchmark: Multi-Session Ping/Pong Throughput & Latency" {
 }
 
 test "Fuzz: Random garbage resilience" {
-
     // We only need a single context for fuzzing
     var rx_nodes: [4]root.Conn.FrameNode = undefined;
-
-    // Create a dummy context to satisfy the callbacks
-    const FuzzContext = struct {
-        fn on_recv(_: *anyopaque, _: []u8) anyerror!usize {
-            return 0;
-        }
-        fn on_send(_: *anyopaque, _: []const u8) anyerror!usize {
-            return 0;
-        }
-        fn on_frame(_: *anyopaque, _: root.Opcode, _: bool, _: []const u8) anyerror!void {}
-    };
-
-    var fuzz_ctx = FuzzContext{};
-    var conn = root.Conn.init(
-        &fuzz_ctx,
-        .{
-            .recv_callback = FuzzContext.on_recv,
-            .send_callback = FuzzContext.on_send,
-            .on_frame_callback = FuzzContext.on_frame,
-            .gen_mask_callback = null,
-        },
-        &rx_nodes,
-    );
+    var conn = root.Conn.init(&rx_nodes);
 
     // Initialize RNG
     var prng = std.Random.DefaultPrng.init(0xDEADBEEF);
@@ -239,16 +216,15 @@ test "Fuzz: Random garbage resilience" {
 
     for (0..iterations) |_| {
         // Reset state machine for the next garbage payload
-        conn.rx_state = .read_base_header;
-        conn.header_bytes_read = 0;
-        conn.header_bytes_needed = 2;
+        conn.complete_frame();
 
         // Fill header buffer with random noise
         random.bytes(&conn.header_buf);
+        conn.header_bytes_read = 2; // pretend we read 2 bytes
 
         // Attempt to parse it. It SHOULD throw errors (like InvalidOpcode, ProtocolError, etc)
         // But it MUST NEVER panic, segfault, or OOM.
-        if (conn.handle_recv()) {
+        if (conn.advance_rx()) |_| {
             // It randomly managed to parse a valid frame header by pure luck!
         } else |_| {
             // Expected: mostly ProtocolError or BufferTooShort
