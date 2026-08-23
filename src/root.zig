@@ -31,10 +31,8 @@ pub const Queue = queue.Queue;
 pub const Conn = event.Conn;
 pub const RxState = event.RxState;
 
-pub const RecvCallback = event.RecvCallback;
-pub const SendCallback = event.SendCallback;
-pub const GenMaskCallback = event.GenMaskCallback;
-pub const OnFrameCallback = event.OnFrameCallback;
+pub const RxAction = event.RxAction;
+pub const TxAction = event.TxAction;
 
 comptime {
     // Force analysis of all imported files to ensure there are no syntax errors
