@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.3-alpha] - 2026-08-24
+
+### Changed
+
+- **DoD & FP Architecture Overhaul**: Replaced virtual dispatch (callbacks/vtables) with a statically dispatched, pure I/O-agnostic state machine (`RxAction`/`TxAction`) in the core `event.Conn` parser, dramatically improving cache locality and branch prediction.
+- Refactored `c_api.zig` to explicitly loop and execute the underlying non-exhaustive I/O actions instead of injecting hidden callbacks across the FFI boundary.
+- Removed over 100 lines of boilerplate bridging code across the Zig/C boundary.
+
 ## [0.1.2-alpha] - 2026-08-18
 
 ### Changed
