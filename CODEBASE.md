@@ -13,7 +13,7 @@ The repository is organized into distinct files, separating contiguous data layo
 | `wslay.h` / `wslay_net.h` | `src/types.zig`      | **Data Types**: Contains packed structs (e.g., `FrameHeader`), non-exhaustive enums (Opcodes, Status Codes), and error sets with explicit backing integers. Separates data layout from behavioral logic. |
 | `wslay_frame.c` / `.h`    | `src/frame.zig`      | **Low-Level Parser**: Implements stateless, pure functions to encode/decode raw frames and perform optimized XOR masking on contiguous byte buffers. Entirely I/O-agnostic.                              |
 | `wslay_queue.c` / `.h`    | `src/queue.zig`      | **Data-Oriented Queue**: Implements zero-allocation bounded ring buffers or intrusive linked lists, avoiding any heap allocations or dynamic nodes.                                                      |
-| `wslay_event.c` / `.h`    | `src/event.zig`      | **State Machine & High-Level API**: Manages high-level connection lifecycles and schedules callbacks. Operates strictly on pre-allocated static contexts.                                                |
+| `wslay_event.c` / `.h`    | `src/event.zig`      | **State Machine & High-Level API**: Manages high-level connection lifecycles and yields statically-dispatched actions (no callbacks). Operates strictly on pre-allocated static contexts.                                                |
 | _(None - C Native)_       | `src/c_api.zig`      | **C Compatibility Layer**: Exposes C-ABI compatible FFI wrappers (`export fn`) using primitive types, many-item pointers, and opaque contexts for Node.js, Deno, and Rust consumers.                     |
 | _(None)_                  | `src/root.zig`       | **Root Module**: Serves as the primary entry point for the Zig package system, packaging and exporting modules for domestic Zig package manager consumers.                                               |
 | `tests/` (CUnit)          | `src/test.zig`       | **Native Unit Tests**: Contains Zig-native `test` blocks asserting struct alignments, bit-width mapping, XOR masking math, and state machine invariants.                                                 |
@@ -41,7 +41,7 @@ All structures are modeled as flat, contiguous blocks of memory.
 1. The consumer reads raw bytes from the network socket into a buffer.
 2. The consumer feeds the slice to `zslay`'s parser.
 3. `zslay` processes the bytes, updates its internal state machine, and applies masking.
-4. `zslay` returns structured frame metadata or invokes pre-registered callbacks.
+4. `zslay` returns structured frame metadata and statically-dispatched actions for the caller to handle.
 
 ### C ABI / FFI Boundary
 

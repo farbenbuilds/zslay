@@ -53,7 +53,7 @@ When touching `src/c_api.zig` or `src/types.zig`:
 - `src/types.zig`: Only passive data structures, layouts, opcodes, and error sets.
 - `src/frame.zig`: Stateless, low-level pure functions (encode, decode, mask).
 - `src/queue.zig`: Data-oriented, zero-allocation collections (ring buffers).
-- `src/event.zig`: High-level connection state machine and callback scheduler.
+- `src/event.zig`: High-level connection state machine yielding statically dispatched events (no callbacks).
 - `src/c_api.zig`: FFI exports (`export fn`).
 
 ## 5. Coding & Workflow Rules
