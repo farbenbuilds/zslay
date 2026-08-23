@@ -32,7 +32,7 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Cache Nix evaluation
-        uses: actions/cache@v5.0.3
+        uses: actions/cache@v6
         with:
           path: ~/.cache/nix
           key: ${{ runner.os }}-nix-eval-${{ hashFiles('flake.lock') }}
