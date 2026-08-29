@@ -1,80 +1,38 @@
-# zslay - Codebase Architecture
+# Codebase Map
 
-`zslay` is a pure, zero-allocation, I/O-agnostic WebSocket protocol parser written in Zig 0.16.0, ported from the C-based `wslay` library. The project leverages Data-Oriented Design (DOD) to guarantee highly optimized CPU cache usage and flat memory layouts.
+`zslay` is a zero-allocation, I/O-agnostic WebSocket framing library written in Zig 0.16.0. Callers own buffers and network I/O; the library parses, serializes, masks, and tracks frame state.
 
----
+## Runtime Flow
 
-## Codebase Directory Structure
+Incoming bytes move through `event.Conn`, which collects a header, delegates validation and decoding to `frame.zig`, and returns an `RxAction` telling the caller what to provide or consume next. Outgoing frames are prepared by `event.Conn`, stored in the caller-backed queue, and exposed through `TxAction`. `c_api.zig` adapts this flow to C callbacks and opaque pointers.
 
-The repository is organized into distinct files, separating contiguous data layouts from stateful pipelines to prevent pointer chasing and ensure acyclic compilation dependencies.
+## Source Files
 
-| C File (wslay)            | Zig File (zslay)     | Architecture & Architectural Role (DOD / Zero-Allocation)                                                                                                                                                |
-| :------------------------ | :------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `wslay.h` / `wslay_net.h` | `src/types.zig`      | **Data Types**: Contains packed structs (e.g., `FrameHeader`), non-exhaustive enums (Opcodes, Status Codes), and error sets with explicit backing integers. Separates data layout from behavioral logic. |
-| `wslay_frame.c` / `.h`    | `src/frame.zig`      | **Low-Level Parser**: Implements stateless, pure functions to encode/decode raw frames and perform optimized XOR masking on contiguous byte buffers. Entirely I/O-agnostic.                              |
-| `wslay_queue.c` / `.h`    | `src/queue.zig`      | **Data-Oriented Queue**: Implements zero-allocation bounded ring buffers or intrusive linked lists, avoiding any heap allocations or dynamic nodes.                                                      |
-| `wslay_event.c` / `.h`    | `src/event.zig`      | **State Machine & High-Level API**: Manages high-level connection lifecycles and yields statically-dispatched actions (no callbacks). Operates strictly on pre-allocated static contexts.                                                |
-| _(None - C Native)_       | `src/c_api.zig`      | **C Compatibility Layer**: Exposes C-ABI compatible FFI wrappers (`export fn`) using primitive types, many-item pointers, and opaque contexts for Node.js, Deno, and Rust consumers.                     |
-| _(None)_                  | `src/root.zig`       | **Root Module**: Serves as the primary entry point for the Zig package system, packaging and exporting modules for domestic Zig package manager consumers.                                               |
-| `tests/` (CUnit)          | `src/test.zig`       | **Native Unit Tests**: Contains Zig-native `test` blocks asserting struct alignments, bit-width mapping, XOR masking math, and state machine invariants.                                                 |
-| `.github/workflows`       | `.github/workflows/` | **CI/CD Pipelines**: Contains GitHub Actions workflows for automated code linting, native Zig testing, Deno-FFI compliance verification, and package publishing.                                         |
-| _(None)_                  | `flake.nix`          | **Nix Development Environment**: Declares the reproducible development environment, pinning the exact Zig 0.16.0 compiler, Deno, and necessary development tools.                                        |
-| _(None)_                  | `flake.lock`         | **Nix Lockfile**: Stores exact hashes and revisions of Nix dependency inputs to guarantee bit-for-bit reproducibility across all environments.                                                           |
-| _(None)_                  | `.envrc`             | **Direnv Shell Trigger**: Integrates with `direnv` to automatically load the Nix development environment (`use flake`) upon entering the workspace directory.                                            |
+| File | Purpose |
+| --- | --- |
+| `src/types.zig` | Defines RFC 6455 opcodes, close codes, parser errors, packed frame headers, and masking keys. |
+| `src/frame.zig` | Encodes and decodes frame headers, calculates serialized sizes, and masks payloads in place. |
+| `src/queue.zig` | Implements a generic bounded deque over caller-provided storage; it performs no allocation. |
+| `src/event.zig` | Holds the receive/transmit state machine, connection context, outgoing frame nodes, and static actions. |
+| `src/c_api.zig` | Exports the C ABI and bridges C callbacks and caller-owned memory to the Zig state machine. |
+| `src/root.zig` | Defines the public Zig module and re-exports the supported API. |
+| `src/test.zig` | Tests layouts, queues, frame encoding/decoding, masking, throughput, and malformed-input resilience. |
 
----
+## Build and Environment
 
-## Core Architectural Decisions
+| File | Purpose |
+| --- | --- |
+| `build.zig` | Builds the Zig module and static C library; defines `test` and `check` steps. |
+| `build.zig.zon` | Stores package metadata, the minimum Zig version, and published paths. |
+| `flake.nix`, `flake.lock` | Pin the Nix development shell, checks, formatter, and cross-platform release builds. |
+| `.envrc` | Loads the Nix flake through direnv. |
+| `.pre-commit-config.yaml` | Configures local formatting and validation hooks. |
 
-### Data-Oriented Design (DOD)
+## Project Support Files
 
-All structures are modeled as flat, contiguous blocks of memory.
-
-- **No Pointer Chasing**: We avoid nesting structures via heap pointers.
-- **Index over Pointer**: Internal relationships and states are tracked using small, explicit integer indices (`u16`/`u32`) rather than 64-bit virtual memory addresses, significantly decreasing the memory footprint and maximizing CPU L1/L2 cache line density.
-- **Static Dispatch**: We prohibit virtual tables (vtables) and dynamic dispatch in parser loops, preferring compile-time `switch` blocks on non-exhaustive enums to maximize branch prediction accuracy.
-
-### I/O-Agnostic Design Flow
-
-`zslay` does not own sockets or execute system-level read/write operations. It behaves as a pure state engine:
-
-1. The consumer reads raw bytes from the network socket into a buffer.
-2. The consumer feeds the slice to `zslay`'s parser.
-3. `zslay` processes the bytes, updates its internal state machine, and applies masking.
-4. `zslay` returns structured frame metadata and statically-dispatched actions for the caller to handle.
-
-### C ABI / FFI Boundary
-
-To integrate seamlessly with external runtimes (such as Deno, Rust, or Node.js), `src/c_api.zig` enforces strict C-ABI compliance:
-
-- Explicit backing types are declared on all FFI-facing enums and packed structs.
-- Stateful contexts are stored in opaque structures and passed as `*anyopaque` pointers.
-- Slices (`[]u8`) are unpacked into pairs of many-item pointers (`[*]u8`) and lengths (`usize`).
-
----
-
-## Testing, Verification & CI/CD Flow
-
-Reliability, style compliance, and protocol correctness are enforced automatically through a layered testing strategy driven by the Nix package manager and automated continuous integration.
-
-### 1. Nix-Powered Local Environment
-
-To guarantee hermetic and reproducible builds, all development, testing, and distribution workflows are executed inside a pinned Nix shell environment (`flake.nix` with `direnv`). This eliminates the "works on my machine" problem by ensuring every developer and CI runner uses the exact same Zig 0.16.0 compiler, Deno runtime, and test dependencies.
-
-### 2. Zig Unit Tests (`src/test.zig`)
-
-The native unit test suite is executed within the Nix environment via `nix develop --command zig build test`. It directly asserts:
-
-- Physical memory footprint and alignment of packed structures (e.g., verifying `@bitSizeOf(FrameHeader) == 16`).
-- Mathematical correctness of the XOR masking implementation.
-- Edge cases of the event queue and bounded ring buffers.
-- State transition validation under invalid protocol payloads.
-
-### 3. Automated Workflows (`.github/workflows/`)
-
-GitHub Actions automatically spin up a Nix environment on every push and pull request to execute the pipeline:
-
-- **`lint.yml` (Code Style & Formatting)**: Uses Nix-cached linters to enforce standard zig formatting, line limits, and trailing whitespace rules.
-- **`test.yml` (Native Zig Unit Testing)**: Installs Nix, restores cached builds, and executes cross-platform unit tests (`zig build test`) across multiple targets.
-
-- **`publish.yml` (Release Packaging & Distribution)**: Triggered by release tags. It uses Nix to cross-compile production-optimized static libraries (`.a` / `.lib`), generates cross-platform archives (`.tar.bz2`, `.tar.gz`, `.tar.xz`) using tools directly from `flake.nix`, and uploads assets directly to GitHub Releases.
+- `README.md` introduces the library and setup.
+- `CONTRIBUTE.md` and `CODING_CONVENTION.md` define the contributor workflow and style.
+- `SECURITY.md`, `CHANGELOG.md`, and `LICENSE` cover reporting, releases, and licensing.
+- `CI_CD_PIPELINE.md` documents CI and publishing; `.github/` contains workflows and community templates.
+- `AGENTS.md`, `SKILL.md`, `.agents/`, and `skills-lock.json` contain repository-specific AI agent guidance.
+- `misc/zslay-banner.png` is the README banner asset.
