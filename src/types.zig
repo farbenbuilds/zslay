@@ -34,6 +34,15 @@ pub const StatusCode = enum(u16) {
     _,
 };
 
+// Local endpoint role used to enforce RFC 6455 masking direction
+pub const EndpointRole = enum(u8) {
+    client = 0,
+    server = 1,
+};
+
+// Largest payload length permitted by the RFC 6455 wire format
+pub const MaxPayloadLen: u64 = 0x7fff_ffff_ffff_ffff;
+
 // Pure Zig error set for WebSocket frame parsing
 pub const Error = error{
     InvalidOpcode,
@@ -43,6 +52,8 @@ pub const Error = error{
     ProtocolError,
     PayloadMasked,
     PayloadNotMasked,
+    PayloadTooLarge,
+    MaskingKeyRequired,
 };
 
 // Contiguous 16-bit physical layout of a WebSocket header

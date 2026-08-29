@@ -1,17 +1,14 @@
-const std = @import("std");
-
 pub fn Queue(comptime T: type) type {
     return struct {
         const Self = @This();
 
         buffer: []T,
-        head: u16 = 0,
-        tail: u16 = 0,
-        len: u16 = 0,
+        head: usize = 0,
+        tail: usize = 0,
+        len: usize = 0,
 
         // initializes a queue with a pre-allocated slice
         pub fn init(buffer: []T) Self {
-            std.debug.assert(buffer.len <= std.math.maxInt(u16));
             return .{
                 .buffer = buffer,
             };
@@ -22,7 +19,7 @@ pub fn Queue(comptime T: type) type {
             if (self.len >= self.buffer.len) return error.QueueFull;
 
             self.buffer[self.tail] = item;
-            self.tail = @intCast((self.tail + 1) % self.buffer.len);
+            self.tail = (self.tail + 1) % self.buffer.len;
             self.len += 1;
         }
 
@@ -30,7 +27,7 @@ pub fn Queue(comptime T: type) type {
         pub fn push_front(self: *Self, item: T) error{QueueFull}!void {
             if (self.len >= self.buffer.len) return error.QueueFull;
 
-            self.head = if (self.head == 0) @intCast(self.buffer.len - 1) else self.head - 1;
+            self.head = if (self.head == 0) self.buffer.len - 1 else self.head - 1;
             self.buffer[self.head] = item;
             self.len += 1;
         }
@@ -40,7 +37,7 @@ pub fn Queue(comptime T: type) type {
             if (self.len == 0) return null;
 
             const item = self.buffer[self.head];
-            self.head = @intCast((self.head + 1) % self.buffer.len);
+            self.head = (self.head + 1) % self.buffer.len;
             self.len -= 1;
             return item;
         }
@@ -49,7 +46,7 @@ pub fn Queue(comptime T: type) type {
         pub fn pop_back(self: *Self) ?T {
             if (self.len == 0) return null;
 
-            self.tail = if (self.tail == 0) @intCast(self.buffer.len - 1) else self.tail - 1;
+            self.tail = if (self.tail == 0) self.buffer.len - 1 else self.tail - 1;
             const item = self.buffer[self.tail];
             self.len -= 1;
             return item;

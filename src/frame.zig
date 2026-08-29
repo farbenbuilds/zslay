@@ -10,15 +10,16 @@ pub const DecodedHeader = struct {
 };
 
 // Performs in-place WebSocket XOR masking/unmasking (Vectorized/Wide-Integer Optimized)
-pub fn mask(buf: []u8, masking_key: types.MaskingKey, pos: usize) void {
+pub fn mask(buf: []u8, masking_key: types.MaskingKey, pos: u64) void {
     if (buf.len == 0) return;
 
     // Rotate masking key based on initial pos
+    const key_pos: usize = @intCast(pos % masking_key.len);
     var k: [4]u8 = undefined;
-    k[0] = masking_key[(pos + 0) % 4];
-    k[1] = masking_key[(pos + 1) % 4];
-    k[2] = masking_key[(pos + 2) % 4];
-    k[3] = masking_key[(pos + 3) % 4];
+    k[0] = masking_key[(key_pos + 0) % 4];
+    k[1] = masking_key[(key_pos + 1) % 4];
+    k[2] = masking_key[(key_pos + 2) % 4];
+    k[3] = masking_key[(key_pos + 3) % 4];
 
     var i: usize = 0;
 
@@ -56,13 +57,40 @@ pub fn get_serialized_size(payload_len: u64, is_masked: bool) usize {
 }
 
 // Serializes frame properties into a raw byte buffer
-pub fn encode_header(buf: []u8, header: types.FrameHeader, extended_len: u64, masking_key: ?types.MaskingKey) types.Error!usize {
-    const actual_len = if (header.payload_len < 126) header.payload_len else extended_len;
-    const required_size = get_serialized_size(actual_len, header.mask);
+pub fn encode_header(
+    buf: []u8,
+    header: types.FrameHeader,
+    extended_len: u64,
+    masking_key: ?types.MaskingKey,
+) types.Error!usize {
+    const op: types.Opcode = @enumFromInt(header.opcode);
+    switch (op) {
+        .continuation, .text, .binary, .close, .ping, .pong => {},
+        _ => return error.InvalidOpcode,
+    }
+
+    if (header.rsv1 or header.rsv2 or header.rsv3) return error.ProtocolError;
+
+    const extended_size: usize = switch (header.payload_len) {
+        126 => blk: {
+            if (extended_len < 126 or extended_len > 65535) return error.ProtocolError;
+            break :blk 2;
+        },
+        127 => blk: {
+            if (extended_len > types.MaxPayloadLen) return error.InvalidLength;
+            if (extended_len < 65536) return error.ProtocolError;
+            break :blk 8;
+        },
+        else => 0,
+    };
+    const actual_len: u64 = if (header.payload_len < 126) header.payload_len else extended_len;
+
+    if (op.is_control() and (!header.fin or actual_len > 125)) return error.ProtocolError;
+    if (header.mask and masking_key == null) return error.MaskingKeyRequired;
+
+    const required_size = 2 + extended_size + if (header.mask) @as(usize, 4) else 0;
 
     if (buf.len < required_size) return error.BufferTooShort;
-
-    if (header.mask and masking_key == null) return error.ProtocolError;
 
     const header_int: u16 = @bitCast(header);
     buf[0] = @intCast(header_int & 0xff);
@@ -95,6 +123,8 @@ pub fn decode_header(buf: []const u8) types.Error!DecodedHeader {
     const header_int = std.mem.readInt(u16, buf[0..2][0..2], .little);
     const header: types.FrameHeader = @bitCast(header_int);
     const op: types.Opcode = @enumFromInt(header.opcode);
+
+    if (header.rsv1 or header.rsv2 or header.rsv3) return error.ProtocolError;
 
     switch (op) {
         .continuation, .text, .binary, .close, .ping, .pong => {},

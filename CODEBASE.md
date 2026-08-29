@@ -14,7 +14,7 @@ Incoming bytes move through `event.Conn`, which collects a header, delegates val
 | `src/frame.zig` | Encodes and decodes frame headers, calculates serialized sizes, and masks payloads in place. |
 | `src/queue.zig` | Implements a generic bounded deque over caller-provided storage; it performs no allocation. |
 | `src/event.zig` | Holds the receive/transmit state machine, connection context, outgoing frame nodes, and static actions. |
-| `src/c_api.zig` | Exports the C ABI and bridges C callbacks and caller-owned memory to the Zig state machine. |
+| `src/c_api.zig` | Exports the role-aware, bounded C ABI and bridges callbacks and caller-owned memory to the Zig state machine. |
 | `src/root.zig` | Defines the public Zig module and re-exports the supported API. |
 | `src/test.zig` | Tests layouts, queues, frame encoding/decoding, masking, throughput, and malformed-input resilience. |
 
@@ -24,6 +24,7 @@ Incoming bytes move through `event.Conn`, which collects a header, delegates val
 | --- | --- |
 | `build.zig` | Builds the Zig module and static C library; defines `test` and `check` steps. |
 | `build.zig.zon` | Stores package metadata, the minimum Zig version, and published paths. |
+| `include/zslay.h` | Declares the installed C ABI, callback contracts, result codes, storage alignment, and borrowed-memory lifetimes. |
 | `flake.nix`, `flake.lock` | Pin the Nix development shell, checks, formatter, and cross-platform release builds. |
 | `.envrc` | Loads the Nix flake through direnv. |
 | `.pre-commit-config.yaml` | Configures local formatting and validation hooks. |
