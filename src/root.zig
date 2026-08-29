@@ -12,6 +12,8 @@ pub const event = @import("event.zig");
 pub const Opcode = types.Opcode;
 pub const StatusCode = types.StatusCode;
 pub const Error = types.Error;
+pub const EndpointRole = types.EndpointRole;
+pub const MaxPayloadLen = types.MaxPayloadLen;
 
 pub const FrameHeader = types.FrameHeader;
 pub const MaskingKey = types.MaskingKey;
@@ -29,6 +31,7 @@ pub const Queue = queue.Queue;
 
 // re-exports high-level connection context and callbacks
 pub const Conn = event.Conn;
+pub const ConnConfig = event.Conn.Config;
 pub const RxState = event.RxState;
 
 pub const RxAction = event.RxAction;

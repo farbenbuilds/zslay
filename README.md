@@ -70,6 +70,14 @@ zig build test
 zig fmt .
 ```
 
+### C API
+
+Native Zig callers initialize `Conn` with a `ConnConfig` containing the endpoint role and frame/message limits. The static library installs `zslay.h`; C callers allocate connection and frame-node storage using the reported size and alignment, then provide the same mandatory configuration.
+
+`zslay_conn_recv` performs one bounded unit of work and returns `ZSLAY_PROGRESS` when the caller should invoke it again. Payload callbacks are streaming chunks: use `payload_offset`, `frame_len`, and `end_of_frame` for boundaries; the WebSocket `fin` bit describes message fragmentation only.
+
+Client connections must provide a cryptographically secure mask callback that fills all four requested bytes and returns zero. Queued transmit payloads remain borrowed until sending completes, and receive chunk pointers expire when the callback returns.
+
 ## Credits
 
 `zslay` is heavily inspired by and ported from the original C WebSocket library, [wslay](https://github.com/tatsuhiro-t/wslay), created by Tatsuhiro Tsujikawa. We extend our gratitude for their foundational work.

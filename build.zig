@@ -22,6 +22,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    lib.installHeader(b.path("include/zslay.h"), "zslay.h");
     b.installArtifact(lib);
 
     // setup local unit tests
