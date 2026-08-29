@@ -6,16 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-08-29
+
 ### Security
 
-- Validate encoded length markers, RSV bits, endpoint masking direction, frame/message limits, and fragmented-frame ordering.
+- Validate encoded lengths, RSV bits, masking direction, frame and message limits, and fragmented-frame ordering.
 - Fail closed when client masking-key generation is unavailable or fails.
-- Bound each C receive call to one transport read and one frame callback and expose explicit chunk offset, total length, and completion metadata.
-- Pin CI and pre-commit dependencies to immutable commits and remove the public vulnerability-report form.
+- Pin CI and pre-commit dependencies to immutable commits.
+
+### Added
+
+- Install the typed `include/zslay.h` header with the static library.
+- Expose chunk offset, total length, and completion metadata through the C receive API.
 
 ### Changed
 
-- Revise the alpha Zig and C connection APIs to require endpoint role and receive limits; install the typed `zslay.h` header with the static library.
+- Require endpoint role and receive limits when initializing Zig and C connections.
+- Bound each C receive call to one transport read and one frame callback.
+
+### Removed
+
+- Remove the public vulnerability-report issue form; use the private process in `SECURITY.md`.
 
 ## [0.1.3-alpha] - 2026-08-24
 
