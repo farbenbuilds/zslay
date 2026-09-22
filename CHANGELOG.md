@@ -22,7 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - Distributed release builds use `-Doptimize=ReleaseSafe` instead of `ReleaseFast`, retaining bounds-checking in release artifacts.
-- `flake.nix` pins exact Zig 0.16.0 with no fallback, adds `pre-commit` to the dev shell, and fails closed during install phases.
+- `flake.nix` pins exact Zig 0.16.0 with no fallback and fails closed during install phases.
 - `test.yml` widens the pull-request path filter to flake files, workflows, `include/`, `build.zig`, and `**/*.c`.
 - `publish.yml` adds a `verify` job that fails when the `v*` tag, `build.zig.zon` version, and `CHANGELOG.md` section disagree, and feeds the matching changelog section into the GitHub release notes.
 - Bump the package version to `0.2.0`.

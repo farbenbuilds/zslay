@@ -71,7 +71,7 @@ zig build test
 
 ## Pre-commit Hooks
 
-This project uses `pre-commit` to guarantee code formatting, syntax correctness, and type safety before any commit is created. The `pre-commit` tool is automatically provided by our Nix development shell.
+This project uses `pre-commit` to guarantee code formatting, syntax correctness, and type safety before any commit is created. The `pre-commit` tool is not bundled in the Nix development shell; install it with your system package manager or `pipx` before running the hooks.
 
 After cloning the repository, install the git hooks locally:
 
