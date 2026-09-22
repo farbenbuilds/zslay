@@ -29,6 +29,8 @@ Use `zig fmt .` to apply formatting. Do not install project tools globally with 
 
 Follow `zig fmt`: four-space indentation and a 120-character line limit. Use `snake_case` for files, functions, and variables; use `PascalCase` for types and type-level constants. Prefix exported C functions with `zslay_`. Prefer early returns, explicit error sets, shallow control flow, and sparse comments. Keep parser loops iterative with early returns rather than recursive. Do not use emojis in code, documentation, branches, or commits. Preserve ABI-safe pointer-plus-length boundaries instead of exposing Zig slices to C.
 
+Define public types at file scope with explicit names. Extract repeated or inline type expressions into named aliases (for example `FrameHeaderBuffer`, `FrameQueue`, or C callback typedefs) instead of nesting types inside containers. Prefer `_len` for byte counts and `_sent` for stream progress over ambiguous names such as `extended_len` or `sent_header`.
+
 ## Testing Guidelines
 
 Use Zig `test` blocks in `src/test.zig`, named `<Area>: <behavior>`, such as `Frame: decode simple unmasked text frame`. Add focused regression tests for parser, queue, layout, masking, and state-machine changes. No numeric coverage target is defined; changed behavior must be exercised. Run `zig build test` before opening a pull request.

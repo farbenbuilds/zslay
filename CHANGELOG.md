@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-09-22
+
+### Changed
+
+- Hoisted `ConnConfig`, `FrameNode`, and `FragmentState` to file scope; `Conn.Config` remains as a compatibility alias.
+- Renamed `DecodedHeader.extended_len` to `payload_len` and `header_size` to `header_len`; renamed `FrameNode` progress fields to `header_sent` and `payload_sent`.
+- Replaced fragmented-message scalar fields with `rx_fragment` and `tx_fragment` `FragmentState` values.
+- Added named aliases `MaskingKeyLen`, `MaxFrameHeaderLen`, `FrameHeaderBuffer`, and `FrameQueue`, removing inline magic numbers from buffer sizing.
+- Renamed the private C bridge types to `Callbacks` and `ZslayConn` and named the streaming `ChunkBuffer` alias.
+- Refreshed the human and LLM documentation for the readable type model.
+
 ## [0.1.7] - 2026-09-22
 
 ### Added

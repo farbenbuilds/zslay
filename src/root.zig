@@ -17,6 +17,9 @@ pub const MaxPayloadLen = types.MaxPayloadLen;
 
 pub const FrameHeader = types.FrameHeader;
 pub const MaskingKey = types.MaskingKey;
+pub const MaskingKeyLen = types.MaskingKeyLen;
+pub const MaxFrameHeaderLen = types.MaxFrameHeaderLen;
+pub const FrameHeaderBuffer = types.FrameHeaderBuffer;
 
 // re-exports frame operations
 pub const DecodedHeader = frame.DecodedHeader;
@@ -31,7 +34,8 @@ pub const Queue = queue.Queue;
 
 // re-exports high-level connection context and callbacks
 pub const Conn = event.Conn;
-pub const ConnConfig = event.Conn.Config;
+pub const ConnConfig = event.ConnConfig;
+pub const FrameNode = event.FrameNode;
 pub const RxState = event.RxState;
 
 pub const RxAction = event.RxAction;

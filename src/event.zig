@@ -23,6 +23,33 @@ pub const RxState = enum(u8) {
     read_payload = 2,
 };
 
+// Caller-provided connection role and frame/message limits
+pub const ConnConfig = struct {
+    role: types.EndpointRole,
+    max_frame_len: u64,
+    max_message_len: u64,
+};
+
+// Ring buffer element representing one outgoing frame
+pub const FrameNode = struct {
+    payload: []const u8 = &.{},
+
+    header_len: usize = 0,
+    header_sent: usize = 0,
+    payload_sent: usize = 0,
+
+    header_buf: types.FrameHeaderBuffer = undefined,
+};
+
+// Fragment tracking shared by the receive and transmit paths
+const FragmentState = struct {
+    opcode: ?types.Opcode = null,
+    message_len: u64 = 0,
+};
+
+// Concrete bounded queue of outgoing frame nodes
+const FrameQueue = queue.Queue(FrameNode);
+
 // Pure: derives the total header byte count from the second base header byte
 fn header_bytes_needed(b1: u8) usize {
     const base_len = b1 & 0x7f;
@@ -34,7 +61,7 @@ fn header_bytes_needed(b1: u8) usize {
         needed += 8;
     }
 
-    if ((b1 & 0x80) != 0) needed += 4;
+    if ((b1 & 0x80) != 0) needed += types.MaskingKeyLen;
 
     return needed;
 }
@@ -42,58 +69,35 @@ fn header_bytes_needed(b1: u8) usize {
 // Zero-allocation, I/O-agnostic WebSocket connection context
 // Coordinates frame streaming, XOR masking, and intrusive TX queueing.
 pub const Conn = struct {
-    pub const Config = struct {
-        role: types.EndpointRole,
-        max_frame_len: u64,
-        max_message_len: u64,
-    };
+    // Compatibility alias; prefer ConnConfig
+    pub const Config = ConnConfig;
 
     payload_bytes_processed: u64 = 0,
 
-    tx_queue: queue.Queue(FrameNode),
+    tx_queue: FrameQueue,
 
     header_bytes_read: usize = 0,
     header_bytes_needed: usize = 2,
 
     decoded_header: ?frame.DecodedHeader = null,
 
-    header_buf: [14]u8 = undefined,
+    header_buf: types.FrameHeaderBuffer = undefined,
     rx_state: RxState = .read_base_header,
 
     role: types.EndpointRole,
     max_frame_len: u64,
     max_message_len: u64,
 
-    fragmented_opcode: ?types.Opcode = null,
-    fragmented_message_len: u64 = 0,
-
-    tx_fragmented_opcode: ?types.Opcode = null,
-    tx_fragmented_message_len: u64 = 0,
-
-    const FragmentState = struct {
-        opcode: ?types.Opcode,
-        message_len: u64,
-    };
-
-    // Ring buffer element representing an outgoing frame
-    pub const FrameNode = struct {
-        payload: []const u8 = &.{},
-
-        header_size: usize = 0,
-        sent_header: usize = 0,
-        sent_payload: usize = 0,
-
-        // Maximum possible WebSocket frame header size is 14 bytes
-        header_buf: [14]u8 = undefined,
-    };
+    rx_fragment: FragmentState = .{},
+    tx_fragment: FragmentState = .{},
 
     // Initializes a Conn context with user-provided storage and protocol limits
-    pub fn init(tx_buffer: []FrameNode, config: Config) types.Error!Conn {
+    pub fn init(tx_buffer: []FrameNode, config: ConnConfig) types.Error!Conn {
         if (config.max_frame_len > types.MaxPayloadLen) return error.InvalidLength;
         if (config.max_message_len > types.MaxPayloadLen) return error.InvalidLength;
 
         return .{
-            .tx_queue = queue.Queue(FrameNode).init(tx_buffer),
+            .tx_queue = FrameQueue.init(tx_buffer),
             .role = config.role,
             .max_frame_len = config.max_frame_len,
             .max_message_len = config.max_message_len,
@@ -101,7 +105,7 @@ pub const Conn = struct {
     }
 
     fn validate_incoming_header(self: *const Conn, decoded: frame.DecodedHeader) types.Error!void {
-        if (decoded.extended_len > self.max_frame_len) return error.PayloadTooLarge;
+        if (decoded.payload_len > self.max_frame_len) return error.PayloadTooLarge;
 
         switch (self.role) {
             .server => if (!decoded.header.mask) return error.PayloadNotMasked,
@@ -113,15 +117,15 @@ pub const Conn = struct {
 
         switch (op) {
             .continuation => {
-                if (self.fragmented_opcode == null) return error.ProtocolError;
-                if (self.fragmented_message_len > self.max_message_len) return error.PayloadTooLarge;
+                if (self.rx_fragment.opcode == null) return error.ProtocolError;
+                if (self.rx_fragment.message_len > self.max_message_len) return error.PayloadTooLarge;
 
-                const remaining = self.max_message_len - self.fragmented_message_len;
-                if (decoded.extended_len > remaining) return error.PayloadTooLarge;
+                const remaining = self.max_message_len - self.rx_fragment.message_len;
+                if (decoded.payload_len > remaining) return error.PayloadTooLarge;
             },
             .text, .binary => {
-                if (self.fragmented_opcode != null) return error.ProtocolError;
-                if (decoded.extended_len > self.max_message_len) return error.PayloadTooLarge;
+                if (self.rx_fragment.opcode != null) return error.ProtocolError;
+                if (decoded.payload_len > self.max_message_len) return error.PayloadTooLarge;
             },
             else => return error.InvalidOpcode,
         }
@@ -158,9 +162,9 @@ pub const Conn = struct {
                 },
                 .read_payload => {
                     const decoded = self.decoded_header orelse return error.ProtocolError;
-                    if (self.payload_bytes_processed > decoded.extended_len) return error.InvalidLength;
+                    if (self.payload_bytes_processed > decoded.payload_len) return error.InvalidLength;
 
-                    const remaining = decoded.extended_len - self.payload_bytes_processed;
+                    const remaining = decoded.payload_len - self.payload_bytes_processed;
                     if (remaining == 0) return RxAction.emit_frame;
                     return RxAction.need_payload;
                 },
@@ -175,16 +179,14 @@ pub const Conn = struct {
         switch (op) {
             .text, .binary => {
                 if (!decoded.header.fin) {
-                    self.fragmented_opcode = op;
-                    self.fragmented_message_len = decoded.extended_len;
+                    self.rx_fragment = .{ .opcode = op, .message_len = decoded.payload_len };
                 }
             },
             .continuation => {
                 if (decoded.header.fin) {
-                    self.fragmented_opcode = null;
-                    self.fragmented_message_len = 0;
+                    self.rx_fragment = .{};
                 } else {
-                    self.fragmented_message_len += decoded.extended_len;
+                    self.rx_fragment.message_len += decoded.payload_len;
                 }
             },
             else => {},
@@ -194,7 +196,7 @@ pub const Conn = struct {
     // Completes the current frame while preserving cross-frame message state
     pub fn complete_frame(self: *Conn) void {
         if (self.decoded_header) |decoded| {
-            if (self.payload_bytes_processed == decoded.extended_len) {
+            if (self.payload_bytes_processed == decoded.payload_len) {
                 self.commit_fragment_state(decoded);
             }
         }
@@ -209,8 +211,7 @@ pub const Conn = struct {
     // Abandons all receive state, including an active fragmented message
     pub fn reset_rx(self: *Conn) void {
         self.complete_frame();
-        self.fragmented_opcode = null;
-        self.fragmented_message_len = 0;
+        self.rx_fragment = .{};
     }
 
     pub fn get_header_buffer(self: *Conn) []u8 {
@@ -225,9 +226,9 @@ pub const Conn = struct {
 
     pub fn advance_payload_read(self: *Conn, bytes: u64) types.Error!void {
         const decoded = self.decoded_header orelse return error.ProtocolError;
-        if (self.payload_bytes_processed > decoded.extended_len) return error.InvalidLength;
+        if (self.payload_bytes_processed > decoded.payload_len) return error.InvalidLength;
 
-        const remaining = decoded.extended_len - self.payload_bytes_processed;
+        const remaining = decoded.payload_len - self.payload_bytes_processed;
         if (bytes > remaining) return error.InvalidLength;
         self.payload_bytes_processed += bytes;
     }
@@ -237,8 +238,8 @@ pub const Conn = struct {
         while (self.tx_queue.len != 0) {
             const node = &self.tx_queue.buffer[self.tx_queue.head];
 
-            if (node.sent_header < node.header_size) return TxAction.write_header;
-            if (node.sent_payload < node.payload.len) return TxAction.write_payload;
+            if (node.header_sent < node.header_len) return TxAction.write_header;
+            if (node.payload_sent < node.payload.len) return TxAction.write_payload;
 
             _ = self.tx_queue.pop_front();
         }
@@ -248,25 +249,25 @@ pub const Conn = struct {
 
     pub fn get_tx_header_buffer(self: *Conn) []const u8 {
         const node = self.tx_queue.buffer[self.tx_queue.head];
-        return node.header_buf[node.sent_header..node.header_size];
+        return node.header_buf[node.header_sent..node.header_len];
     }
 
     pub fn advance_tx_header(self: *Conn, bytes: usize) types.Error!void {
         const node = &self.tx_queue.buffer[self.tx_queue.head];
-        const remaining = node.header_size - node.sent_header;
+        const remaining = node.header_len - node.header_sent;
         if (bytes > remaining) return error.InvalidLength;
-        node.sent_header += bytes;
+        node.header_sent += bytes;
     }
 
     fn validate_outgoing_node(self: *const Conn, node: FrameNode) types.Error!FragmentState {
-        if (node.header_size < 2 or node.header_size > node.header_buf.len) return error.InvalidLength;
-        if (node.sent_header != 0 or node.sent_payload != 0) return error.ProtocolError;
+        if (node.header_len < 2 or node.header_len > node.header_buf.len) return error.InvalidLength;
+        if (node.header_sent != 0 or node.payload_sent != 0) return error.ProtocolError;
 
-        const decoded = try frame.decode_header(node.header_buf[0..node.header_size]);
-        if (decoded.header_size != node.header_size) return error.InvalidLength;
+        const decoded = try frame.decode_header(node.header_buf[0..node.header_len]);
+        if (decoded.header_len != node.header_len) return error.InvalidLength;
 
         const payload_len: u64 = @intCast(node.payload.len);
-        if (decoded.extended_len != payload_len) return error.InvalidLength;
+        if (decoded.payload_len != payload_len) return error.InvalidLength;
         if (payload_len > self.max_frame_len) return error.PayloadTooLarge;
 
         switch (self.role) {
@@ -275,31 +276,26 @@ pub const Conn = struct {
         }
 
         const op: types.Opcode = @enumFromInt(decoded.header.opcode);
-        if (op.is_control()) {
-            return .{
-                .opcode = self.tx_fragmented_opcode,
-                .message_len = self.tx_fragmented_message_len,
-            };
-        }
+        if (op.is_control()) return self.tx_fragment;
 
         switch (op) {
             .continuation => {
-                if (self.tx_fragmented_opcode == null) return error.ProtocolError;
-                if (self.tx_fragmented_message_len > self.max_message_len) return error.PayloadTooLarge;
+                if (self.tx_fragment.opcode == null) return error.ProtocolError;
+                if (self.tx_fragment.message_len > self.max_message_len) return error.PayloadTooLarge;
 
-                const remaining = self.max_message_len - self.tx_fragmented_message_len;
+                const remaining = self.max_message_len - self.tx_fragment.message_len;
                 if (payload_len > remaining) return error.PayloadTooLarge;
-                if (decoded.header.fin) return .{ .opcode = null, .message_len = 0 };
+                if (decoded.header.fin) return .{};
 
                 return .{
-                    .opcode = self.tx_fragmented_opcode,
-                    .message_len = self.tx_fragmented_message_len + payload_len,
+                    .opcode = self.tx_fragment.opcode,
+                    .message_len = self.tx_fragment.message_len + payload_len,
                 };
             },
             .text, .binary => {
-                if (self.tx_fragmented_opcode != null) return error.ProtocolError;
+                if (self.tx_fragment.opcode != null) return error.ProtocolError;
                 if (payload_len > self.max_message_len) return error.PayloadTooLarge;
-                if (decoded.header.fin) return .{ .opcode = null, .message_len = 0 };
+                if (decoded.header.fin) return .{};
                 return .{ .opcode = op, .message_len = payload_len };
             },
             else => return error.InvalidOpcode,
@@ -310,8 +306,7 @@ pub const Conn = struct {
     pub fn queue_frame(self: *Conn, node: FrameNode) (types.Error || error{QueueFull})!void {
         const next_fragment = try self.validate_outgoing_node(node);
         try self.tx_queue.push_back(node);
-        self.tx_fragmented_opcode = next_fragment.opcode;
-        self.tx_fragmented_message_len = next_fragment.message_len;
+        self.tx_fragment = next_fragment;
     }
 
     // Builds a validated frame header over caller-owned payload storage
@@ -346,7 +341,7 @@ pub const Conn = struct {
         };
 
         const base_len: u7 = if (payload.len < 126) @intCast(payload.len) else if (payload.len <= 65535) 126 else 127;
-        const header_struct = types.FrameHeader{
+        const header = types.FrameHeader{
             .payload_len = base_len,
             .mask = is_masked,
             .opcode = @intFromEnum(opcode),
@@ -357,9 +352,9 @@ pub const Conn = struct {
             .fin = fin,
         };
 
-        node.header_size = try frame.encode_header(
+        node.header_len = try frame.encode_header(
             &node.header_buf,
-            header_struct,
+            header,
             payload_len,
             key,
         );
