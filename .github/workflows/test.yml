@@ -10,6 +10,12 @@ on:
     paths:
       - '**/*.zig'
       - '**/*.zon'
+      - '**/*.c'
+      - 'build.zig'
+      - 'flake.nix'
+      - 'flake.lock'
+      - '.github/workflows/**'
+      - 'include/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

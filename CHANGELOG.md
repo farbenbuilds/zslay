@@ -4,7 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.2.0] - 2026-09-23
+
+### Added
+
+- Pure `frame.validate_close_payload`, re-exported as `root.validate_close_payload`, for application-layer close validation: an empty payload is accepted, a one-byte payload is rejected, the close code must be 1000-1003, 1007-1014, or 3000-4999, and the reason must be valid UTF-8. A bad code returns `error.ProtocolError` (close code 1002) and an invalid reason returns `error.InvalidUtf8` (close code 1007).
+- Close status codes `1012` (`service_restart`), `1013` (`try_again_later`), and `1014` (`bad_gateway`) to `StatusCode`.
+- Additive C export `zslay_conn_reset`, which abandons partial receive state, including an active fragmented message, without touching the transport and returns `ZSLAY_ERR_INVALID_ARGUMENT` for a null or misaligned handle.
+- C11 ABI smoke test `src/c_api_smoke.c`, compiled and linked against the installed `zslay.h` and static library by `zig build test`.
+- Standalone benchmark `src/bench.zig`, moved out of the unit test suite and run with `zig build bench`.
+
+### Fixed
+
+- `Conn.get_tx_header_buffer` no longer returns a slice into a local copy of the queued node, removing a use-after-return.
+- `Conn.get_tx_header_buffer` returns an empty slice on an empty TX queue, and `Conn.advance_tx_header` returns `error.InvalidLength` instead of reading a stale node.
+
+### Changed
+
+- Distributed release builds use `-Doptimize=ReleaseSafe` instead of `ReleaseFast`, retaining bounds-checking in release artifacts.
+- `flake.nix` pins exact Zig 0.16.0 with no fallback and fails closed during install phases.
+- `test.yml` widens the pull-request path filter to flake files, workflows, `include/`, `build.zig`, and `**/*.c`.
+- `publish.yml` adds a `verify` job that fails when the `v*` tag, `build.zig.zon` version, and `CHANGELOG.md` section disagree, and feeds the matching changelog section into the GitHub release notes.
+- Bump the package version to `0.2.0`.
 
 ## [0.1.9] - 2026-09-22
 

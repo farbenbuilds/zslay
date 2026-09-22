@@ -272,6 +272,13 @@ pub export fn zslay_conn_send(conn_ptr: ?*anyopaque) c_int {
     return ResultOk;
 }
 
+// Abandons receive state, including any active fragmented message
+pub export fn zslay_conn_reset(conn_ptr: ?*anyopaque) c_int {
+    const zslay_conn = cast_opaque(ZslayConn, conn_ptr) orelse return ResultInvalidArgument;
+    zslay_conn.conn.reset_rx();
+    return ResultOk;
+}
+
 // Serializes a validated frame into caller-owned node storage
 pub export fn zslay_conn_prepare_frame(
     conn_ptr: ?*anyopaque,

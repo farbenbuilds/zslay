@@ -46,7 +46,7 @@ Length fields use `_len` for byte counts and `_sent` for stream progress, so a f
 `zslay` is not just a port; it's an enhancement over traditional implementations:
 - **Purely I/O-Agnostic:** It treats parsing as a pure data transformation engine. `zslay` does not touch network sockets. You feed it slices of raw bytes, and it yields structured events.
 - **Memory Predictability:** By keeping state management outside the library and avoiding heap allocations entirely, `zslay` is completely deterministic in its memory usage.
-- **Secure by Default:** Zig's strict bounds checking guarantees resilience against malformed or malicious WebSocket payloads.
+- **Secure by Default:** Distributed artifacts are built with `ReleaseSafe`, so bounds-checking and the other safety checks remain enabled in release binaries. Malformed or malicious WebSocket payloads are rejected with typed errors.
 
 ## Getting Started
 
@@ -84,8 +84,14 @@ pre-commit install
 ```bash
 zig build test
 ```
+*This also compiles, links, and runs the C11 ABI smoke test (`src/c_api_smoke.c`) against the installed `zslay.h` and static library.*
 
-**5. Format the code**
+**5. Run the benchmark**
+```bash
+zig build bench
+```
+
+**6. Format the code**
 ```bash
 zig fmt .
 ```
@@ -96,7 +102,11 @@ Native Zig callers initialize `Conn` with a `ConnConfig` containing the endpoint
 
 `zslay_conn_recv` performs one bounded unit of work and returns `ZSLAY_PROGRESS` when the caller should invoke it again. Payload callbacks are streaming chunks: use `payload_offset`, `frame_len`, and `end_of_frame` for boundaries; the WebSocket `fin` bit describes message fragmentation only.
 
+`zslay_conn_reset` abandons partial receive state, including an active fragmented message, without touching the transport. It returns `ZSLAY_ERR_INVALID_ARGUMENT` for a null or misaligned handle.
+
 Client connections must provide a cryptographically secure mask callback that fills all four requested bytes and returns zero. Queued transmit payloads remain borrowed until sending completes, and receive chunk pointers expire when the callback returns.
+
+Application-layer close validation is available to Zig callers through `validate_close_payload(payload)`: an empty payload is valid, a one-byte payload is rejected, the close code must be 1000-1003, 1007-1014, or 3000-4999, and the reason must be valid UTF-8.
 
 ## AI Agent Workflows
 

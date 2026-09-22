@@ -19,18 +19,20 @@ Types are plain, top-level declarations with explicit names. Repeated or inline 
 | File | Purpose |
 | --- | --- |
 | `src/types.zig` | Defines RFC 6455 opcodes, close codes, parser errors, packed frame headers, and the named size aliases `MaskingKeyLen`, `MaskingKey`, `MaxFrameHeaderLen`, and `FrameHeaderBuffer`. |
-| `src/frame.zig` | Pure functions that encode and decode frame headers, resolve canonical lengths into `DecodedHeader`, calculate serialized sizes, and mask payloads in place. |
+| `src/frame.zig` | Pure functions that encode and decode frame headers, resolve canonical lengths into `DecodedHeader`, calculate serialized sizes, mask payloads in place, and validate close payloads. |
 | `src/queue.zig` | Implements a generic bounded deque `Queue(Element)` over caller-provided storage; it performs no allocation. |
 | `src/event.zig` | Holds the iterative receive/transmit state machine, `ConnConfig`, `FrameNode`, `FragmentState`, and the concrete `FrameQueue` alias for the TX ring buffer. |
 | `src/c_api.zig` | Exports the role-aware, bounded C ABI and bridges the `Callbacks` struct and caller-owned `ZslayConn` storage to the Zig state machine. |
 | `src/root.zig` | Defines the public Zig module and re-exports the supported API. |
-| `src/test.zig` | Tests layouts, queues, frame encoding/decoding, masking, throughput, and malformed-input resilience. |
+| `src/test.zig` | Tests layouts, queues, frame encoding/decoding, masking, and malformed-input resilience. |
+| `src/bench.zig` | Standalone multi-session encode/decode benchmark reporting throughput and sampled latency percentiles; run with `zig build bench` and excluded from the unit test suite. |
+| `src/c_api_smoke.c` | C11 ABI smoke test compiled and linked against the installed `zslay.h` and static library; executed by `zig build test`. |
 
 ## Build and Environment
 
 | File | Purpose |
 | --- | --- |
-| `build.zig` | Builds the Zig module and static C library; defines `test` and `check` steps. |
+| `build.zig` | Builds the Zig module and static C library; defines `test`, `bench`, and `check` steps. The `test` step also compiles, links, and runs the C ABI smoke test. |
 | `build.zig.zon` | Stores package metadata, the minimum Zig version, and published paths. |
 | `include/zslay.h` | Declares the installed C ABI, callback contracts, result codes, storage alignment, and borrowed-memory lifetimes. |
 | `flake.nix`, `flake.lock` | Pin the Nix development shell, checks, formatter, and cross-platform release builds. |

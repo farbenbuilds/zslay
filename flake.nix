@@ -27,7 +27,7 @@
           then pkgs.pkgsMusl
           else null;
 
-        zig = inputs.zig-overlay.packages.${system}."0.16.0" or pkgs.zig;
+        zig = inputs.zig-overlay.packages.${system}."0.16.0";
 
         mkDevShell = p:
           p.mkShell {
@@ -49,7 +49,7 @@
             nativeBuildInputs = [zig];
             buildPhase = ''
               export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
-              zig build -Doptimize=ReleaseFast ${
+              zig build -Doptimize=ReleaseSafe ${
                 if target != ""
                 then "-Dtarget=${target}"
                 else ""
@@ -57,7 +57,10 @@
             '';
             installPhase = ''
               mkdir -p $out
-              cp -r zig-out/* $out/ 2>/dev/null || true
+              cp -r zig-out/lib $out/lib
+              cp -r zig-out/include $out/include
+              test -n "$(ls -A $out/lib)"
+              test -n "$(ls -A $out/include)"
             '';
           };
       in {
@@ -118,11 +121,14 @@
               nativeBuildInputs = [zig];
               buildPhase = ''
                 export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
-                zig build -Doptimize=ReleaseFast
+                zig build -Doptimize=ReleaseSafe
               '';
               installPhase = ''
                 mkdir -p $out
-                cp -r zig-out/* $out/ 2>/dev/null || true
+                cp -r zig-out/lib $out/lib
+                cp -r zig-out/include $out/include
+                test -n "$(ls -A $out/lib)"
+                test -n "$(ls -A $out/include)"
               '';
             };
           };

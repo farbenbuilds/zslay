@@ -29,6 +29,8 @@ pub const encode_header = frame.encode_header;
 pub const get_serialized_size = frame.get_serialized_size;
 pub const mask = frame.mask;
 
+pub const validate_close_payload = frame.validate_close_payload;
+
 // re-exports ring buffer/dequeue
 pub const Queue = queue.Queue;
 

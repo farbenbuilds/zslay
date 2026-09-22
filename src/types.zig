@@ -30,6 +30,9 @@ pub const StatusCode = enum(u16) {
 
     mandatory_ext = 1010,
     internal_server_err = 1011,
+    service_restart = 1012,
+    try_again_later = 1013,
+    bad_gateway = 1014,
     tls_handshake = 1015,
     _,
 };
@@ -54,6 +57,7 @@ pub const Error = error{
     PayloadNotMasked,
     PayloadTooLarge,
     MaskingKeyRequired,
+    InvalidUtf8,
 };
 
 // Contiguous 16-bit physical layout of a WebSocket header
