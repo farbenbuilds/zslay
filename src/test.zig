@@ -4,7 +4,7 @@ const root = @import("root.zig");
 const c_api = @import("c_api.zig");
 
 fn init_conn(
-    tx_buffer: []root.Conn.FrameNode,
+    tx_buffer: []root.FrameNode,
     role: root.EndpointRole,
     max_frame_len: u64,
     max_message_len: u64,
@@ -166,8 +166,8 @@ test "Frame: decode simple unmasked text frame" {
     const raw = [_]u8{ 0x81, 0x05 };
     const decoded = try root.decode_header(&raw);
 
-    try testing.expectEqual(5, decoded.extended_len);
-    try testing.expectEqual(2, decoded.header_size);
+    try testing.expectEqual(5, decoded.payload_len);
+    try testing.expectEqual(2, decoded.header_len);
     try testing.expectEqual(null, decoded.masking_key);
 
     try testing.expect(decoded.header.fin);
@@ -194,8 +194,8 @@ test "Frame: encode and decode masked binary frame with extended length" {
     try testing.expectEqual(8, size); // 2 base + 2 extended len + 4 mask
 
     const decoded = try root.decode_header(buf[0..size]);
-    try testing.expectEqual(200, decoded.extended_len);
-    try testing.expectEqual(8, decoded.header_size);
+    try testing.expectEqual(200, decoded.payload_len);
+    try testing.expectEqual(8, decoded.header_len);
     try testing.expectEqual(key, decoded.masking_key.?);
     try testing.expect(decoded.header.fin);
     try testing.expect(decoded.header.mask);
@@ -236,7 +236,7 @@ test "Frame: serialized size boundaries" {
 }
 
 test "Connection: stream extended headers before payload" {
-    var nodes: [1]root.Conn.FrameNode = undefined;
+    var nodes: [1]root.FrameNode = undefined;
     var conn = try init_conn(&nodes, .client, 1024, 1024);
 
     try testing.expectEqual(root.RxAction.need_header, try load_header(&conn, &[_]u8{ 0x81, 0x7e }));
@@ -275,21 +275,21 @@ test "Frame: reject inconsistent extended length markers before writing" {
 
 test "Frame: decode canonical payload length boundaries" {
     const short = try root.decode_header(&[_]u8{ 0x82, 125 });
-    try testing.expectEqual(125, short.extended_len);
+    try testing.expectEqual(125, short.payload_len);
 
     const marker_126_min = try root.decode_header(&[_]u8{ 0x82, 126, 0, 126 });
-    try testing.expectEqual(126, marker_126_min.extended_len);
+    try testing.expectEqual(126, marker_126_min.payload_len);
     const marker_126_max = try root.decode_header(&[_]u8{ 0x82, 126, 0xff, 0xff });
-    try testing.expectEqual(65535, marker_126_max.extended_len);
+    try testing.expectEqual(65535, marker_126_max.payload_len);
 
     const marker_127_min = try root.decode_header(&[_]u8{
         0x82, 127, 0, 0, 0, 0, 0, 1, 0, 0,
     });
-    try testing.expectEqual(65536, marker_127_min.extended_len);
+    try testing.expectEqual(65536, marker_127_min.payload_len);
     const marker_127_max = try root.decode_header(&[_]u8{
         0x82, 127, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     });
-    try testing.expectEqual(root.MaxPayloadLen, marker_127_max.extended_len);
+    try testing.expectEqual(root.MaxPayloadLen, marker_127_max.payload_len);
 
     try testing.expectError(
         error.ProtocolError,
@@ -312,7 +312,7 @@ test "Frame: reject reserved bits without negotiated extensions" {
 }
 
 test "Connection: enforce endpoint masking direction" {
-    var server_nodes: [1]root.Conn.FrameNode = undefined;
+    var server_nodes: [1]root.FrameNode = undefined;
     var server = try init_conn(&server_nodes, .server, 1024, 1024);
     try testing.expectError(error.PayloadNotMasked, load_header(&server, &[_]u8{ 0x81, 0x00 }));
 
@@ -321,7 +321,7 @@ test "Connection: enforce endpoint masking direction" {
     try testing.expectEqual(root.RxAction.emit_frame, try load_header(&server, &masked_empty));
     server.complete_frame();
 
-    var client_nodes: [1]root.Conn.FrameNode = undefined;
+    var client_nodes: [1]root.FrameNode = undefined;
     var client = try init_conn(&client_nodes, .client, 1024, 1024);
     try testing.expectError(error.PayloadMasked, load_header(&client, &masked_empty));
 
@@ -330,7 +330,7 @@ test "Connection: enforce endpoint masking direction" {
 }
 
 test "Connection: enforce frame and fragmented message limits" {
-    var nodes: [1]root.Conn.FrameNode = undefined;
+    var nodes: [1]root.FrameNode = undefined;
     var conn = try init_conn(&nodes, .client, 10, 10);
 
     try testing.expectError(error.PayloadTooLarge, load_header(&conn, &[_]u8{ 0x81, 11 }));
@@ -344,7 +344,7 @@ test "Connection: enforce frame and fragmented message limits" {
 }
 
 test "Connection: validate fragmented frame ordering" {
-    var nodes: [1]root.Conn.FrameNode = undefined;
+    var nodes: [1]root.FrameNode = undefined;
     var conn = try init_conn(&nodes, .client, 1024, 1024);
 
     try testing.expectError(error.ProtocolError, load_header(&conn, &[_]u8{ 0x80, 0x00 }));
@@ -355,9 +355,9 @@ test "Connection: validate fragmented frame ordering" {
 
     try testing.expectEqual(root.RxAction.emit_frame, try load_header(&conn, &[_]u8{ 0x89, 0x00 }));
     conn.complete_frame();
-    try testing.expect(conn.fragmented_opcode != null);
+    try testing.expect(conn.rx_fragment.opcode != null);
 
-    var invalid_nodes: [1]root.Conn.FrameNode = undefined;
+    var invalid_nodes: [1]root.FrameNode = undefined;
     var invalid = try init_conn(&invalid_nodes, .client, 1024, 1024);
     try testing.expectEqual(root.RxAction.emit_frame, try load_header(&invalid, &[_]u8{ 0x01, 0x00 }));
     invalid.complete_frame();
@@ -365,18 +365,18 @@ test "Connection: validate fragmented frame ordering" {
 
     try testing.expectEqual(root.RxAction.emit_frame, try load_header(&conn, &[_]u8{ 0x00, 0x00 }));
     conn.complete_frame();
-    try testing.expect(conn.fragmented_opcode != null);
+    try testing.expect(conn.rx_fragment.opcode != null);
 
     try testing.expectEqual(root.RxAction.emit_frame, try load_header(&conn, &[_]u8{ 0x80, 0x00 }));
     conn.complete_frame();
-    try testing.expectEqual(null, conn.fragmented_opcode);
+    try testing.expectEqual(null, conn.rx_fragment.opcode);
 }
 
 test "Connection: fail closed for masking keys and outbound direction" {
     const payload = "hello";
     const key = root.MaskingKey{ 1, 2, 3, 4 };
 
-    var client_nodes: [1]root.Conn.FrameNode = undefined;
+    var client_nodes: [1]root.FrameNode = undefined;
     const client = try init_conn(&client_nodes, .client, 5, 5);
     try testing.expectError(
         error.MaskingKeyRequired,
@@ -388,7 +388,7 @@ test "Connection: fail closed for masking keys and outbound direction" {
     );
     _ = try client.prepare_frame(true, .text, payload, true, key);
 
-    var server_nodes: [1]root.Conn.FrameNode = undefined;
+    var server_nodes: [1]root.FrameNode = undefined;
     const server = try init_conn(&server_nodes, .server, 5, 5);
     try testing.expectError(
         error.PayloadMasked,
@@ -402,27 +402,27 @@ test "Connection: fail closed for masking keys and outbound direction" {
 }
 
 test "Connection: empty transmit queue is safe" {
-    var no_nodes: [0]root.Conn.FrameNode = .{};
+    var no_nodes: [0]root.FrameNode = .{};
     var conn = try init_conn(&no_nodes, .server, 1024, 1024);
     try testing.expectEqual(null, conn.advance_tx());
 }
 
 test "Connection: revalidate prepared nodes at the destination queue" {
-    var source_nodes: [1]root.Conn.FrameNode = undefined;
+    var source_nodes: [1]root.FrameNode = undefined;
     const source = try init_conn(&source_nodes, .server, 1024, 1024);
     const unmasked = try source.prepare_frame(true, .binary, "payload", false, null);
 
-    var client_nodes: [2]root.Conn.FrameNode = undefined;
+    var client_nodes: [2]root.FrameNode = undefined;
     var client = try init_conn(&client_nodes, .client, 1024, 1024);
     try testing.expectError(error.PayloadNotMasked, client.queue_frame(unmasked));
 
-    var limited_nodes: [2]root.Conn.FrameNode = undefined;
+    var limited_nodes: [2]root.FrameNode = undefined;
     var limited = try init_conn(&limited_nodes, .server, 3, 3);
     try testing.expectError(error.PayloadTooLarge, limited.queue_frame(unmasked));
 }
 
 test "Connection: validate outbound fragmented frame ordering" {
-    var nodes: [8]root.Conn.FrameNode = undefined;
+    var nodes: [8]root.FrameNode = undefined;
     var conn = try init_conn(&nodes, .server, 10, 10);
 
     const orphan = try conn.prepare_frame(true, .continuation, "", false, null);
@@ -430,11 +430,11 @@ test "Connection: validate outbound fragmented frame ordering" {
 
     const start = try conn.prepare_frame(false, .text, "123456", false, null);
     try conn.queue_frame(start);
-    try testing.expect(conn.tx_fragmented_opcode != null);
+    try testing.expect(conn.tx_fragment.opcode != null);
 
     const ping = try conn.prepare_frame(true, .ping, "", false, null);
     try conn.queue_frame(ping);
-    try testing.expect(conn.tx_fragmented_opcode != null);
+    try testing.expect(conn.tx_fragment.opcode != null);
 
     const overlapping = try conn.prepare_frame(true, .binary, "", false, null);
     try testing.expectError(error.ProtocolError, conn.queue_frame(overlapping));
@@ -444,7 +444,7 @@ test "Connection: validate outbound fragmented frame ordering" {
 
     const finish = try conn.prepare_frame(true, .continuation, "1234", false, null);
     try conn.queue_frame(finish);
-    try testing.expectEqual(null, conn.tx_fragmented_opcode);
+    try testing.expectEqual(null, conn.tx_fragment.opcode);
 
     const next = try conn.prepare_frame(true, .binary, "", false, null);
     try conn.queue_frame(next);
@@ -470,7 +470,7 @@ test "C API: stream chunks with explicit frame completion" {
 
     var harness = CApiHarness{ .input = &wire };
     var conn_mem: [1024]u8 align(64) = undefined;
-    var tx_nodes: [1]root.Conn.FrameNode = undefined;
+    var tx_nodes: [1]root.FrameNode = undefined;
 
     try testing.expect(c_api.zslay_conn_get_size() <= conn_mem.len);
     try testing.expect(c_api.zslay_conn_get_align() <= 64);
@@ -517,7 +517,7 @@ test "C API: stream chunks with explicit frame completion" {
 test "C API: reject callback over-reporting" {
     var harness = CApiHarness{ .over_report = true };
     var conn_mem: [1024]u8 align(64) = undefined;
-    var tx_nodes: [1]root.Conn.FrameNode = undefined;
+    var tx_nodes: [1]root.FrameNode = undefined;
 
     const conn_opt = c_api.zslay_conn_init(
         &conn_mem,
@@ -543,7 +543,7 @@ test "C API: bound empty frame delivery to one frame per call" {
     };
     var harness = CApiHarness{ .input = &wire };
     var conn_mem: [1024]u8 align(64) = undefined;
-    var tx_nodes: [1]root.Conn.FrameNode = undefined;
+    var tx_nodes: [1]root.FrameNode = undefined;
 
     const conn_opt = c_api.zslay_conn_init(
         &conn_mem,
@@ -578,8 +578,8 @@ test "C API: reject send callback over-reporting" {
     const payload = "x";
     var harness = CApiHarness{ .over_report_send = true };
     var conn_mem: [1024]u8 align(64) = undefined;
-    var tx_nodes: [1]root.Conn.FrameNode = undefined;
-    var node: root.Conn.FrameNode = undefined;
+    var tx_nodes: [1]root.FrameNode = undefined;
+    var node: root.FrameNode = undefined;
 
     const conn_opt = c_api.zslay_conn_init(
         &conn_mem,
@@ -603,15 +603,15 @@ test "C API: reject send callback over-reporting" {
     );
     try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_queue_frame(conn, &node));
     try testing.expectEqual(c_api.ResultCallbackError, c_api.zslay_conn_send(conn));
-    try testing.expectEqual(0, tx_nodes[0].sent_header);
+    try testing.expectEqual(0, tx_nodes[0].header_sent);
 }
 
 test "C API: require a successful client mask generator" {
     const payload = "x";
     var harness = CApiHarness{};
     var conn_mem: [1024]u8 align(64) = undefined;
-    var tx_nodes: [1]root.Conn.FrameNode = undefined;
-    var node = root.Conn.FrameNode{ .header_size = 123 };
+    var tx_nodes: [1]root.FrameNode = undefined;
+    var node = root.FrameNode{ .header_len = 123 };
 
     var conn_opt = c_api.zslay_conn_init(
         &conn_mem,
@@ -631,7 +631,7 @@ test "C API: require a successful client mask generator" {
         c_api.ResultProtocolError,
         c_api.zslay_conn_prepare_frame(conn_opt.?, &node, 1, 1, payload.ptr, payload.len, 1),
     );
-    try testing.expectEqual(123, node.header_size);
+    try testing.expectEqual(123, node.header_len);
 
     harness.mask_result = -1;
     conn_opt = c_api.zslay_conn_init(
@@ -652,7 +652,7 @@ test "C API: require a successful client mask generator" {
         c_api.ResultCallbackError,
         c_api.zslay_conn_prepare_frame(conn_opt.?, &node, 1, 1, payload.ptr, payload.len, 1),
     );
-    try testing.expectEqual(123, node.header_size);
+    try testing.expectEqual(123, node.header_len);
 
     harness.mask_result = 0;
     try testing.expectEqual(
@@ -662,7 +662,7 @@ test "C API: require a successful client mask generator" {
     try testing.expectEqualSlices(
         u8,
         &harness.mask_key,
-        node.header_buf[node.header_size - harness.mask_key.len .. node.header_size],
+        node.header_buf[node.header_len - harness.mask_key.len .. node.header_len],
     );
 }
 
@@ -763,7 +763,7 @@ test "Benchmark: Multi-Session Ping/Pong Throughput & Latency" {
 
 test "Fuzz: Random garbage resilience" {
     // We only need a single context for fuzzing
-    var rx_nodes: [4]root.Conn.FrameNode = undefined;
+    var rx_nodes: [4]root.FrameNode = undefined;
     var conn = try init_conn(&rx_nodes, .client, 1024 * 1024, 1024 * 1024);
 
     // Initialize RNG

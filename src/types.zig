@@ -10,7 +10,7 @@ pub const Opcode = enum(u4) {
     _,
 
     pub inline fn is_control(self: Opcode) bool {
-        return @intFromEnum(self) >= 0x8;
+        return @intFromEnum(self) >= @intFromEnum(Opcode.close);
     }
 };
 
@@ -68,5 +68,14 @@ pub const FrameHeader = packed struct(u16) {
     mask: bool,
 };
 
-// 4-byte contiguous array used for frame payload XOR masking
-pub const MaskingKey = [4]u8;
+// Number of bytes in a WebSocket masking key
+pub const MaskingKeyLen: usize = 4;
+
+// Fixed-size array used for frame payload XOR masking
+pub const MaskingKey = [MaskingKeyLen]u8;
+
+// Largest possible frame header: base, extended length, and masking key
+pub const MaxFrameHeaderLen: usize = 2 + 8 + MaskingKeyLen;
+
+// Caller-owned buffer large enough for any WebSocket frame header
+pub const FrameHeaderBuffer = [MaxFrameHeaderLen]u8;

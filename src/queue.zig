@@ -1,21 +1,22 @@
-pub fn Queue(comptime T: type) type {
+// Bounded FIFO deque over caller-provided storage
+pub fn Queue(comptime Element: type) type {
     return struct {
         const Self = @This();
 
-        buffer: []T,
+        buffer: []Element,
         head: usize = 0,
         tail: usize = 0,
         len: usize = 0,
 
         // initializes a queue with a pre-allocated slice
-        pub fn init(buffer: []T) Self {
+        pub fn init(buffer: []Element) Self {
             return .{
                 .buffer = buffer,
             };
         }
 
         // appends an item to the tail of the queue
-        pub fn push_back(self: *Self, item: T) error{QueueFull}!void {
+        pub fn push_back(self: *Self, item: Element) error{QueueFull}!void {
             if (self.len >= self.buffer.len) return error.QueueFull;
 
             self.buffer[self.tail] = item;
@@ -24,7 +25,7 @@ pub fn Queue(comptime T: type) type {
         }
 
         // prepends an item to the head of the queue
-        pub fn push_front(self: *Self, item: T) error{QueueFull}!void {
+        pub fn push_front(self: *Self, item: Element) error{QueueFull}!void {
             if (self.len >= self.buffer.len) return error.QueueFull;
 
             self.head = if (self.head == 0) self.buffer.len - 1 else self.head - 1;
@@ -33,7 +34,7 @@ pub fn Queue(comptime T: type) type {
         }
 
         // removes and returns the head item of the queue
-        pub fn pop_front(self: *Self) ?T {
+        pub fn pop_front(self: *Self) ?Element {
             if (self.len == 0) return null;
 
             const item = self.buffer[self.head];
@@ -43,7 +44,7 @@ pub fn Queue(comptime T: type) type {
         }
 
         // removes and returns the tail item of the queue
-        pub fn pop_back(self: *Self) ?T {
+        pub fn pop_back(self: *Self) ?Element {
             if (self.len == 0) return null;
 
             self.tail = if (self.tail == 0) self.buffer.len - 1 else self.tail - 1;

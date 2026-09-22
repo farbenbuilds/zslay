@@ -29,6 +29,18 @@ The core is organized as pure functions around explicit state:
 - **Iterative Control Flow:** The RX/TX state machines use early returns and flat loops instead of recursion, keeping stack usage constant.
 - **No Silent Fallbacks:** Invalid protocol input returns a typed error instead of a substituted default.
 
+## Readable Type Model
+
+Every public type is top-level, explicitly named, and free of nested or inferred type machinery:
+
+- `ConnConfig` and `FrameNode` describe connection inputs and outgoing frames without nesting inside `Conn`.
+- `DecodedHeader`, `FrameHeader`, and `MaskingKey` model wire data with fixed, protocol-defined widths.
+- `FrameHeaderBuffer`, `MaxFrameHeaderLen`, and `MaskingKeyLen` replace magic numbers in buffer sizing.
+- `FrameQueue` names the concrete bounded queue used by `Conn`, while `Queue(Element)` remains available for other element types.
+- `RxAction`, `TxAction`, and `RxState` stay flat `u8`-backed enums driven by `switch`, never vtables.
+
+Length fields use `_len` for byte counts and `_sent` for stream progress, so a field name alone tells you what it holds.
+
 ## An Improved RFC6455 Implementation
 
 `zslay` is not just a port; it's an enhancement over traditional implementations:

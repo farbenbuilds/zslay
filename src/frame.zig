@@ -1,29 +1,29 @@
 const std = @import("std");
 const types = @import("types.zig");
 
-// Unpacked frame header properties
+// Unpacked frame header: physical layout plus resolved wire values
 pub const DecodedHeader = struct {
-    extended_len: u64,
-    header_size: usize,
-    masking_key: ?types.MaskingKey,
     header: types.FrameHeader,
+    payload_len: u64,
+    header_len: usize,
+    masking_key: ?types.MaskingKey,
 };
 
-// Physical header length and declared payload length resolved together
-const LengthInfo = struct {
-    extended_len: u64,
-    header_size: usize,
+// Payload byte count and physical header byte count resolved together
+const DecodedLength = struct {
+    payload_len: u64,
+    header_len: usize,
 };
 
-// Pure: resolves extended payload length and header byte count from a base header
-fn read_length(buf: []const u8, payload_len: u7) types.Error!LengthInfo {
+// Pure: resolves payload length and header byte count from a base header
+fn read_length(buf: []const u8, payload_len: u7) types.Error!DecodedLength {
     if (payload_len == 126) {
         if (buf.len < 4) return error.BufferTooShort;
 
         const len: u64 = std.mem.readInt(u16, buf[2..4][0..2], .big);
         if (len < 126) return error.ProtocolError;
 
-        return .{ .extended_len = len, .header_size = 4 };
+        return .{ .payload_len = len, .header_len = 4 };
     }
 
     if (payload_len == 127) {
@@ -33,10 +33,10 @@ fn read_length(buf: []const u8, payload_len: u7) types.Error!LengthInfo {
         if (len < 65536) return error.ProtocolError;
         if (len >> 63 != 0) return error.InvalidLength;
 
-        return .{ .extended_len = len, .header_size = 10 };
+        return .{ .payload_len = len, .header_len = 10 };
     }
 
-    return .{ .extended_len = payload_len, .header_size = 2 };
+    return .{ .payload_len = payload_len, .header_len = 2 };
 }
 
 // Pure: performs in-place WebSocket XOR masking with wide-integer chunks
@@ -44,15 +44,15 @@ pub fn mask(buf: []u8, masking_key: types.MaskingKey, pos: u64) void {
     if (buf.len == 0) return;
 
     const key_pos: usize = @intCast(pos % masking_key.len);
-    var k: types.MaskingKey = undefined;
-    for (0..4) |i| k[i] = masking_key[(key_pos + i) % 4];
+    var key: types.MaskingKey = undefined;
+    for (0..types.MaskingKeyLen) |i| key[i] = masking_key[(key_pos + i) % types.MaskingKeyLen];
 
     const word_size = @sizeOf(usize);
     var i: usize = 0;
 
     if (buf.len >= word_size) {
         var wide_key_buf: [word_size]u8 = undefined;
-        for (&wide_key_buf, 0..) |*b, j| b.* = k[j % 4];
+        for (&wide_key_buf, 0..) |*b, j| b.* = key[j % types.MaskingKeyLen];
 
         const wide_key: usize = std.mem.readInt(usize, &wide_key_buf, .native);
 
@@ -63,7 +63,7 @@ pub fn mask(buf: []u8, masking_key: types.MaskingKey, pos: u64) void {
         }
     }
 
-    while (i < buf.len) : (i += 1) buf[i] ^= k[i % 4];
+    while (i < buf.len) : (i += 1) buf[i] ^= key[i % types.MaskingKeyLen];
 }
 
 // Computes physical header byte length
@@ -76,7 +76,7 @@ pub fn get_serialized_size(payload_len: u64, is_masked: bool) usize {
         size += 8;
     }
 
-    if (is_masked) size += 4;
+    if (is_masked) size += types.MaskingKeyLen;
 
     return size;
 }
@@ -85,7 +85,7 @@ pub fn get_serialized_size(payload_len: u64, is_masked: bool) usize {
 pub fn encode_header(
     buf: []u8,
     header: types.FrameHeader,
-    extended_len: u64,
+    payload_len: u64,
     masking_key: ?types.MaskingKey,
 ) types.Error!usize {
     const op: types.Opcode = @enumFromInt(header.opcode);
@@ -98,22 +98,22 @@ pub fn encode_header(
 
     const extended_size: usize = switch (header.payload_len) {
         126 => blk: {
-            if (extended_len < 126 or extended_len > 65535) return error.ProtocolError;
+            if (payload_len < 126 or payload_len > 65535) return error.ProtocolError;
             break :blk 2;
         },
         127 => blk: {
-            if (extended_len > types.MaxPayloadLen) return error.InvalidLength;
-            if (extended_len < 65536) return error.ProtocolError;
+            if (payload_len > types.MaxPayloadLen) return error.InvalidLength;
+            if (payload_len < 65536) return error.ProtocolError;
             break :blk 8;
         },
         else => 0,
     };
-    const actual_len: u64 = if (header.payload_len < 126) header.payload_len else extended_len;
+    const actual_len: u64 = if (header.payload_len < 126) header.payload_len else payload_len;
 
     if (op.is_control() and (!header.fin or actual_len > 125)) return error.ProtocolError;
     if (header.mask and masking_key == null) return error.MaskingKeyRequired;
 
-    const required_size = 2 + extended_size + if (header.mask) @as(usize, 4) else 0;
+    const required_size = 2 + extended_size + if (header.mask) types.MaskingKeyLen else 0;
 
     if (buf.len < required_size) return error.BufferTooShort;
 
@@ -124,17 +124,17 @@ pub fn encode_header(
     var index: usize = 2;
 
     if (header.payload_len == 126) {
-        std.mem.writeInt(u16, buf[index .. index + 2][0..2], @intCast(extended_len), .big);
+        std.mem.writeInt(u16, buf[index .. index + 2][0..2], @intCast(payload_len), .big);
         index += 2;
     } else if (header.payload_len == 127) {
-        std.mem.writeInt(u64, buf[index .. index + 8][0..8], extended_len, .big);
+        std.mem.writeInt(u64, buf[index .. index + 8][0..8], payload_len, .big);
         index += 8;
     }
 
     if (header.mask) {
         const key = masking_key.?;
-        @memcpy(buf[index .. index + 4], &key);
-        index += 4;
+        @memcpy(buf[index .. index + types.MaskingKeyLen], &key);
+        index += types.MaskingKeyLen;
     }
 
     return index;
@@ -157,26 +157,26 @@ pub fn decode_header(buf: []const u8) types.Error!DecodedHeader {
 
     if (op.is_control() and (header.payload_len >= 126 or !header.fin)) return error.ProtocolError;
 
-    const info = try read_length(buf, header.payload_len);
+    const decoded_len = try read_length(buf, header.payload_len);
 
     if (!header.mask) {
         return .{
-            .extended_len = info.extended_len,
-            .header_size = info.header_size,
-            .masking_key = null,
             .header = header,
+            .payload_len = decoded_len.payload_len,
+            .header_len = decoded_len.header_len,
+            .masking_key = null,
         };
     }
 
-    if (buf.len < info.header_size + 4) return error.BufferTooShort;
+    if (buf.len < decoded_len.header_len + types.MaskingKeyLen) return error.BufferTooShort;
 
     var key: types.MaskingKey = undefined;
-    @memcpy(&key, buf[info.header_size .. info.header_size + 4]);
+    @memcpy(&key, buf[decoded_len.header_len .. decoded_len.header_len + types.MaskingKeyLen]);
 
     return .{
-        .extended_len = info.extended_len,
-        .header_size = info.header_size + 4,
-        .masking_key = key,
         .header = header,
+        .payload_len = decoded_len.payload_len,
+        .header_len = decoded_len.header_len + types.MaskingKeyLen,
+        .masking_key = key,
     };
 }

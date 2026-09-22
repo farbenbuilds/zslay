@@ -24,6 +24,9 @@ For architecture see [CODEBASE.md](CODEBASE.md); for setup, workflows, and relea
 ### Type Definitions & Data-Oriented Design (DOD)
 
 - **PascalCase** for type names (e.g., `FrameHeader`, `ParserState`).
+- Define public types at file scope with explicit names; do not nest types inside containers.
+- Extract repeated or inline type expressions into named aliases (for example `FrameHeaderBuffer`, `FrameQueue`, or C callback typedefs).
+- Name byte counts with `_len` and stream progress with `_sent` (for example `payload_len`, `header_sent`) instead of ambiguous names such as `extended_len`.
 - Use `packed struct` for precise hardware and network protocol layouts (e.g., WebSocket frame headers) to guarantee exact bit-widths and zero padding.
 - Use `extern struct` for types that cross the C FFI boundary.
 - Group data by access patterns (prefer Struct of Arrays over Array of Structs when processing bulk payloads).
