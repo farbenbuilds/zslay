@@ -19,7 +19,7 @@ For architecture see [CODEBASE.md](CODEBASE.md); for setup, workflows, and relea
 ### File Naming
 
 - **`snake_case`** for all `.zig` and `.zon` files (e.g., `frame_header.zig`, `state_machine.zig`).
-- `root.zig` serves as the primary entry point for the Zig module and C FFI exports.
+- `root.zig` is the Zig module entry point; C FFI exports live in `src/c_api.zig`.
 
 ### Type Definitions & Data-Oriented Design (DOD)
 
@@ -34,7 +34,7 @@ For architecture see [CODEBASE.md](CODEBASE.md); for setup, workflows, and relea
 
 ### Naming Conventions
 
-- **Variables and functions**: `snake_case` (Linux Kernel style) [6, 7].
+- **Variables and functions**: `snake_case` (Linux Kernel style).
 - **Type-level constants and standard globals**: `PascalCase` (Zig standard).
 - **File-level scoped private variables**: prefix with underscore `_var_name` (rarely used).
 - **C FFI exported functions**: prefix with `zslay_` (e.g., `zslay_frame_parse`).
@@ -47,7 +47,7 @@ For architecture see [CODEBASE.md](CODEBASE.md); for setup, workflows, and relea
 - **Flat Nesting**: Avoid deep `if/else` blocks. Maximum 2 levels of indentation within a function body.
 - **Iteration over Recursion**: Parser and state machine loops must be iterative with early returns. Recursion is prohibited in parser paths.
 - **Error Handling**: Use Zig's `error` sets and `!`. **Never use `catch unreachable`** unless the condition is mathematically proven impossible.
-- **Resource Cleanup**: Use Zig's `defer` and `errdefer` in place of the traditional Linux Kernel `goto error_out` labels [8]. This guarantees cleanup on scope exit without spaghetti control flow.
+- **Resource Cleanup**: Use Zig's `defer` and `errdefer` in place of the traditional Linux Kernel `goto error_out` labels. This guarantees cleanup on scope exit without spaghetti control flow.
 
 ---
 
@@ -55,7 +55,7 @@ For architecture see [CODEBASE.md](CODEBASE.md); for setup, workflows, and relea
 
 - **Pure Core**: Functions in `src/frame.zig` and pure helpers must not mutate external state or capture hidden globals. The same input must yield the same output, and writes go only into caller-owned buffers.
 - **Explicit State**: All mutable state lives in caller-provided contexts (`src/queue.zig`, `src/event.Conn`). Module-level mutable variables are prohibited.
-- **No Object-Oriented Constructs**: No inheritance, no vtables, no dynamic dispatch, no hidden receiver state. Zig methods are allowed only as thin, explicit transitions over caller-owned contexts.
+- **No Object-Oriented Constructs**: No inheritance, no vtables, no dynamic dispatch, no hidden receiver state. Zig methods are allowed only as thin, explicit transitions over caller-owned contexts. C callback typedefs at the FFI boundary are the sole exception; see Section 6.
 - **Typed Failures**: Public functions declare explicit error sets. Silent fallbacks (zero keys, truncation, default substitution) are prohibited.
 - **Deterministic Control Flow**: Prefer `switch` over non-exhaustive enums, early returns, and flat loops.
 
@@ -64,7 +64,7 @@ For architecture see [CODEBASE.md](CODEBASE.md); for setup, workflows, and relea
 ## 4. Memory and Allocations
 
 - **Zero-Allocation**: No hidden allocations. The parser must remain completely detached from memory allocators (`std.mem.Allocator`).
-- **I/O Agnostic**: The parser only operates on user-provided slices (`[]u8` or `[]const u8`). It reads and updates state, leaving actual I/O execution (such as using `std.Io` in Zig 0.16.0 [4]) and memory management entirely to the caller.
+- **I/O Agnostic**: The parser only operates on user-provided slices (`[]u8` or `[]const u8`). It reads and updates state, leaving actual I/O execution (such as using `std.Io` in Zig 0.16.0) and memory management entirely to the caller.
 - **Large Structures**: Pass large structures by constant pointer (`*const T`) to avoid unnecessary stack copying.
 
 ---
@@ -99,7 +99,7 @@ For architecture see [CODEBASE.md](CODEBASE.md); for setup, workflows, and relea
 ### Restricted Patterns
 
 - `std.debug.print`: **Off** (only allowed in local `test` blocks, never in production code).
-- **Dynamic dispatch (Vtables / Function Pointers)**: **Off**. To route logic dynamically, explicitly use `switch` statements over enums (e.g., `ParserState`) to maintain strict static dispatch and optimize branch prediction. _(Note: The builtin `@fieldParentPtr` is allowed because it is a static, compile-time O(1) pointer offset calculation, not a runtime dynamic dispatch)._
+- **Dynamic dispatch (Vtables / Function Pointers)**: **Off**. To route logic dynamically, explicitly use `switch` statements over enums (e.g., `ParserState`) to maintain strict static dispatch and optimize branch prediction. _(Note: The builtin `@fieldParentPtr` is allowed because it is a static, compile-time O(1) pointer offset calculation, not a runtime dynamic dispatch)._ C callback typedefs at the FFI boundary (`src/c_api.zig`, `include/zslay.h`) are the documented exception: they are function pointers required by the C ABI, never used to dispatch core parser paths, which stay `switch`-based.
 
 ---
 

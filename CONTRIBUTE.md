@@ -50,7 +50,8 @@ Zig backend (run from project root):
 
 ```bash
 zig build                 # build the static library artifact (outputs to zig-out/lib/)
-zig build test            # run unit tests in src/test.zig
+zig build test            # run unit tests in src/test.zig and the C ABI smoke test
+zig build bench           # run the standalone encode/decode benchmark
 zig build check           # run semantic linter (type-check without emitting binaries)
 zig fmt --check .         # verify code formatting
 zig fmt .                 # format code automatically
@@ -82,8 +83,9 @@ pre-commit install
 Every time you run `git commit`, the following checks will execute automatically (fail-fast):
 
 1. **zig-fmt**: Auto-formats staged `.zig` files.
-2. **zig-ast-check**: Performs a lightning-fast syntax validation.
-3. **zig-build-check**: Runs the Zig compiler's semantic analysis and type-checking via `zig build check`.
+2. **zig-build-test**: Runs `zig build test`, which includes the C ABI smoke test.
+
+Generic hygiene hooks (`trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-added-large-files`, `check-merge-conflict`) also run.
 
 To run all checks manually across the entire codebase at any time:
 
@@ -115,24 +117,25 @@ Example: `feat(core): implement dod frame header packed struct`
 
 Full pipeline reference: [CI_CD_PIPELINE.md](CI_CD_PIPELINE.md).
 
-- Lint (`lint.yml`): runs `zig fmt --check .` on every pull request into `main` modifying `.zig`, `.zon`, or `build.zig` files (Ubuntu, Zig 0.16.0).
-- Test (`test.yml`): runs `zig build test` natively inside a Nix environment on every pull request and push to main.
-- Release (`publish.yml`): triggered by pushing a version tag matching `v*` (e.g. `v0.1.0`).
-  Uses Nix `flake-parts` to cross-compile the static library (`.a` / `.lib`) across multiple targets (Linux glibc/musl, macOS, Windows), exclusively packages Linux/macOS targets into tarballs (`.tar.bz2`, `.tar.gz`, `.tar.xz`) and Windows targets into `.zip` natively using the `flake.nix` dev shell, creates the GitHub release named after the tag with notes extracted from the matching `CHANGELOG.md` section, and uploads the generated archives to the release.
+- Lint (`lint.yml`): runs `zig fmt --check .` on every pull request into `main` modifying `.zig`, `.zon`, or `build.zig` files (Ubuntu, Zig 0.16.0 via `mlugg/setup-zig`).
+- Test (`test.yml`): on every pull request and push to `main`, runs `zig fmt --check .` and `nix flake check` inside Nix. The flake checks build the native and musl test derivations, and `zig build test` includes the C ABI smoke test.
+- Release (`publish.yml`): triggered by pushing a version tag matching `v*` (e.g. `v0.2.0`). The `verify` job fails when the tag, the `build.zig.zon` version, and the matching `CHANGELOG.md` section disagree, and passes that section to the release job as the release notes.
+  Uses Nix `flake-parts` to cross-compile the static library (`.a` / `.lib`) with `ReleaseSafe` across multiple targets (Linux glibc/musl, macOS, Windows), exclusively packages Linux/macOS targets into tarballs (`.tar.bz2`, `.tar.gz`, `.tar.xz`) and Windows targets into `.zip` natively using the `flake.nix` dev shell, creates the GitHub release named after the tag with the extracted notes, and uploads the generated archives to the release.
 
 ## Cutting a Release
 
 Releases follow semantic versioning and are driven by `v*` tags, not by pushes to `main`.
 
 1. Bump the version in `build.zig.zon`.
-2. Add a `## [x.y.z]` section to `CHANGELOG.md`; the workflow extracts the release notes
-   from it (tag `v0.1.0` maps to section `## [0.1.0]`).
+2. Add a `## [x.y.z]` section to `CHANGELOG.md`; the `verify` job requires the tag, the
+   `build.zig.zon` version, and this section to agree, and extracts the section as the
+   release notes (tag `v0.2.0` maps to section `## [0.2.0]`).
 3. Land the bump on `main` through a pull request.
 4. Tag the release commit and push the tag:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 
 ```
 

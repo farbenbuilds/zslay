@@ -1,6 +1,6 @@
 # Global SKILL.md
 
-This document provides a summary of all the available AI agent skills configured for the `zslay` project (version 0.1.9).
+This document provides a summary of all the available AI agent skills configured for the `zslay` project (version 0.2.0).
 
 ## Core Project Skills
 
