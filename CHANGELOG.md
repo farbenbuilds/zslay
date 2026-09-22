@@ -6,15 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Added
-
-- Specialized sub-agent configurations in `.opencode/agents/` for the parser, I/O event loop, C ABI, Node-API bindings, tests, review, release, and documentation.
-- `AGENT_DIRECTORY.md` describing agent ownership, delegation rules, and the skill coverage matrix.
-
-### Changed
-
-- Updated `AGENTS.md`, `CODEBASE.md`, `SKILL.md`, `README.md`, and `CONTRIBUTE.md` for the sub-agent directory.
-
 ## [0.1.9] - 2026-09-22
 
 ### Changed
