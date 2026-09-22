@@ -26,10 +26,20 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(lib);
 
     // build the C ABI smoke test against the static library
+    // Linux uses a static musl target so sandboxed Nix checks can spawn the binary
+    const smoke_target = if (target.result.os.tag == .linux)
+        b.resolveTargetQuery(.{
+            .cpu_arch = target.result.cpu.arch,
+            .os_tag = .linux,
+            .abi = .musl,
+        })
+    else
+        target;
+
     const c_smoke = b.addExecutable(.{
         .name = "c_api_smoke",
         .root_module = b.createModule(.{
-            .target = target,
+            .target = smoke_target,
             .optimize = optimize,
             .link_libc = true,
         }),
