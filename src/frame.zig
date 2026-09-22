@@ -180,3 +180,18 @@ pub fn decode_header(buf: []const u8) types.Error!DecodedHeader {
         .masking_key = key,
     };
 }
+
+// Pure: validates a close frame payload code and UTF-8 reason
+pub fn validate_close_payload(payload: []const u8) types.Error!void {
+    if (payload.len == 0) return;
+    if (payload.len == 1) return error.ProtocolError;
+
+    const code: u16 = std.mem.readInt(u16, payload[0..2][0..2], .big);
+    if (!is_valid_close_code(code)) return error.ProtocolError;
+    if (!std.unicode.utf8ValidateSlice(payload[2..])) return error.InvalidUtf8;
+}
+
+// Close codes permitted on the wire by RFC 6455 and IANA registrations
+fn is_valid_close_code(code: u16) bool {
+    return (code >= 1000 and code <= 1003) or (code >= 1007 and code <= 1014) or (code >= 3000 and code <= 4999);
+}

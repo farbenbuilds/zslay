@@ -248,11 +248,15 @@ pub const Conn = struct {
     }
 
     pub fn get_tx_header_buffer(self: *Conn) []const u8 {
-        const node = self.tx_queue.buffer[self.tx_queue.head];
+        if (self.tx_queue.len == 0) return &.{};
+
+        const node = &self.tx_queue.buffer[self.tx_queue.head];
         return node.header_buf[node.header_sent..node.header_len];
     }
 
     pub fn advance_tx_header(self: *Conn, bytes: usize) types.Error!void {
+        if (self.tx_queue.len == 0) return error.InvalidLength;
+
         const node = &self.tx_queue.buffer[self.tx_queue.head];
         const remaining = node.header_len - node.header_sent;
         if (bytes > remaining) return error.InvalidLength;

@@ -86,6 +86,13 @@ int zslay_conn_recv(void *conn);
 int zslay_conn_send(void *conn);
 
 /*
+ * Abandons partial receive state, including an active fragmented message.
+ * The transport is not touched. Returns ZSLAY_ERR_INVALID_ARGUMENT for a null
+ * or misaligned handle.
+ */
+int zslay_conn_reset(void *conn);
+
+/*
  * payload remains borrowed and must stay immutable until the queued node has
  * been fully sent. Clients must mask; servers must not mask. The mask callback
  * must fill exactly len random bytes and return zero on success.
