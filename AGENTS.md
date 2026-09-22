@@ -6,6 +6,10 @@ The public Zig API starts in `src/root.zig`. Keep protocol types and layouts in 
 
 Core code must remain zero-allocation and I/O-agnostic. Use caller-provided buffers, flat data layouts, static dispatch, and explicit integer-backed FFI types. Do not add socket operations or heap allocators to parser paths.
 
+## Functional Core
+
+`src/frame.zig` must stay pure: given the same input it returns the same output and writes only into caller-owned buffers. All mutation lives in `src/queue.zig` and `src/event.Conn`, reached exclusively through caller-provided context pointers. Use flat iterative loops with early returns; recursion, dynamic dispatch, and silent fallbacks are prohibited. Invalid input returns a typed error instead of a substituted default.
+
 ## Build, Test, and Development Commands
 
 Enter the pinned Zig 0.16.0 environment before development:
@@ -23,7 +27,7 @@ Use `zig fmt .` to apply formatting. Do not install project tools globally with 
 
 ## Coding Style & Naming Conventions
 
-Follow `zig fmt`: four-space indentation and a 120-character line limit. Use `snake_case` for files, functions, and variables; use `PascalCase` for types and type-level constants. Prefix exported C functions with `zslay_`. Prefer early returns, explicit error sets, shallow control flow, and sparse comments. Do not use emojis in code, documentation, branches, or commits. Preserve ABI-safe pointer-plus-length boundaries instead of exposing Zig slices to C.
+Follow `zig fmt`: four-space indentation and a 120-character line limit. Use `snake_case` for files, functions, and variables; use `PascalCase` for types and type-level constants. Prefix exported C functions with `zslay_`. Prefer early returns, explicit error sets, shallow control flow, and sparse comments. Keep parser loops iterative with early returns rather than recursive. Do not use emojis in code, documentation, branches, or commits. Preserve ABI-safe pointer-plus-length boundaries instead of exposing Zig slices to C.
 
 ## Testing Guidelines
 

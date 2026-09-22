@@ -9,38 +9,61 @@ pub const DecodedHeader = struct {
     header: types.FrameHeader,
 };
 
-// Performs in-place WebSocket XOR masking/unmasking (Vectorized/Wide-Integer Optimized)
+// Physical header length and declared payload length resolved together
+const LengthInfo = struct {
+    extended_len: u64,
+    header_size: usize,
+};
+
+// Pure: resolves extended payload length and header byte count from a base header
+fn read_length(buf: []const u8, payload_len: u7) types.Error!LengthInfo {
+    if (payload_len == 126) {
+        if (buf.len < 4) return error.BufferTooShort;
+
+        const len: u64 = std.mem.readInt(u16, buf[2..4][0..2], .big);
+        if (len < 126) return error.ProtocolError;
+
+        return .{ .extended_len = len, .header_size = 4 };
+    }
+
+    if (payload_len == 127) {
+        if (buf.len < 10) return error.BufferTooShort;
+
+        const len: u64 = std.mem.readInt(u64, buf[2..10][0..8], .big);
+        if (len < 65536) return error.ProtocolError;
+        if (len >> 63 != 0) return error.InvalidLength;
+
+        return .{ .extended_len = len, .header_size = 10 };
+    }
+
+    return .{ .extended_len = payload_len, .header_size = 2 };
+}
+
+// Pure: performs in-place WebSocket XOR masking with wide-integer chunks
 pub fn mask(buf: []u8, masking_key: types.MaskingKey, pos: u64) void {
     if (buf.len == 0) return;
 
-    // Rotate masking key based on initial pos
     const key_pos: usize = @intCast(pos % masking_key.len);
-    var k: [4]u8 = undefined;
-    k[0] = masking_key[(key_pos + 0) % 4];
-    k[1] = masking_key[(key_pos + 1) % 4];
-    k[2] = masking_key[(key_pos + 2) % 4];
-    k[3] = masking_key[(key_pos + 3) % 4];
+    var k: types.MaskingKey = undefined;
+    for (0..4) |i| k[i] = masking_key[(key_pos + i) % 4];
 
+    const word_size = @sizeOf(usize);
     var i: usize = 0;
 
-    // Wide integer XOR optimization for bulk masking
-    if (buf.len >= @sizeOf(usize)) {
-        var wide_key_buf: [@sizeOf(usize)]u8 = undefined;
+    if (buf.len >= word_size) {
+        var wide_key_buf: [word_size]u8 = undefined;
         for (&wide_key_buf, 0..) |*b, j| b.* = k[j % 4];
-        const wide_key = std.mem.readInt(usize, &wide_key_buf, .native);
 
-        while (i + @sizeOf(usize) <= buf.len) {
-            const chunk = buf[i .. i + @sizeOf(usize)];
-            const val = std.mem.readInt(usize, chunk[0..@sizeOf(usize)], .native);
-            std.mem.writeInt(usize, chunk[0..@sizeOf(usize)], val ^ wide_key, .native);
-            i += @sizeOf(usize);
+        const wide_key: usize = std.mem.readInt(usize, &wide_key_buf, .native);
+
+        while (i + word_size <= buf.len) : (i += word_size) {
+            const chunk = buf[i .. i + word_size];
+            const val: usize = std.mem.readInt(usize, chunk[0..word_size], .native);
+            std.mem.writeInt(usize, chunk[0..word_size], val ^ wide_key, .native);
         }
     }
 
-    // Scalar fallback for tail
-    while (i < buf.len) : (i += 1) {
-        buf[i] ^= k[i % 4];
-    }
+    while (i < buf.len) : (i += 1) buf[i] ^= k[i % 4];
 }
 
 // Computes physical header byte length
@@ -49,7 +72,9 @@ pub fn get_serialized_size(payload_len: u64, is_masked: bool) usize {
 
     if (payload_len >= 126 and payload_len <= 65535) {
         size += 2;
-    } else if (payload_len > 65535) size += 8;
+    } else if (payload_len > 65535) {
+        size += 8;
+    }
 
     if (is_masked) size += 4;
 
@@ -115,11 +140,10 @@ pub fn encode_header(
     return index;
 }
 
-// Parses a raw byte buffer into a DecodedHeader struct
+// Pure: parses a raw byte buffer into a DecodedHeader value
 pub fn decode_header(buf: []const u8) types.Error!DecodedHeader {
     if (buf.len < 2) return error.BufferTooShort;
 
-    // Explicit endianness parsing for robust cross-platform decoding
     const header_int = std.mem.readInt(u16, buf[0..2][0..2], .little);
     const header: types.FrameHeader = @bitCast(header_int);
     const op: types.Opcode = @enumFromInt(header.opcode);
@@ -131,48 +155,28 @@ pub fn decode_header(buf: []const u8) types.Error!DecodedHeader {
         _ => return error.InvalidOpcode,
     }
 
-    if (op.is_control()) {
-        if (header.payload_len >= 126 or !header.fin) return error.ProtocolError;
+    if (op.is_control() and (header.payload_len >= 126 or !header.fin)) return error.ProtocolError;
+
+    const info = try read_length(buf, header.payload_len);
+
+    if (!header.mask) {
+        return .{
+            .extended_len = info.extended_len,
+            .header_size = info.header_size,
+            .masking_key = null,
+            .header = header,
+        };
     }
 
-    var index: usize = 2;
-    var extended_len: u64 = 0;
+    if (buf.len < info.header_size + 4) return error.BufferTooShort;
 
-    if (header.payload_len == 126) {
-        if (buf.len < 4) return error.BufferTooShort;
+    var key: types.MaskingKey = undefined;
+    @memcpy(&key, buf[info.header_size .. info.header_size + 4]);
 
-        extended_len = std.mem.readInt(u16, buf[index .. index + 2][0..2], .big);
-        index += 2;
-
-        if (extended_len < 126) return error.ProtocolError;
-    } else if (header.payload_len == 127) {
-        if (buf.len < 10) return error.BufferTooShort;
-
-        extended_len = std.mem.readInt(u64, buf[index .. index + 8][0..8], .big);
-        index += 8;
-
-        if (extended_len < 65536) return error.ProtocolError;
-
-        if (extended_len >> 63 != 0) return error.InvalidLength;
-    } else {
-        extended_len = header.payload_len;
-    }
-
-    if (header.mask and buf.len < index + 4) return error.BufferTooShort;
-
-    var masking_key: ?types.MaskingKey = null;
-
-    if (header.mask) {
-        var key: types.MaskingKey = undefined;
-        @memcpy(&key, buf[index .. index + 4]);
-        masking_key = key;
-        index += 4;
-    }
-
-    return DecodedHeader{
-        .extended_len = extended_len,
-        .header_size = index,
-        .masking_key = masking_key,
+    return .{
+        .extended_len = info.extended_len,
+        .header_size = info.header_size + 4,
+        .masking_key = key,
         .header = header,
     };
 }

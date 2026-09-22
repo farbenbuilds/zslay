@@ -148,6 +148,19 @@ test "Queue: zero-allocation ring buffer" {
     try testing.expectEqual(null, q.pop_front());
 }
 
+test "Queue: push_front and pop_back" {
+    var backing_buffer: [2]u32 = undefined;
+    var q = root.Queue(u32).init(&backing_buffer);
+
+    try q.push_front(1);
+    try q.push_back(2);
+    try testing.expectError(error.QueueFull, q.push_front(3));
+
+    try testing.expectEqual(@as(u32, 2), q.pop_back().?);
+    try testing.expectEqual(@as(u32, 1), q.pop_front().?);
+    try testing.expectEqual(null, q.pop_back());
+}
+
 test "Frame: decode simple unmasked text frame" {
     // 0x81 (FIN + TEXT) 0x05 (length 5) -> "Hello"
     const raw = [_]u8{ 0x81, 0x05 };
@@ -203,6 +216,31 @@ test "Frame: XOR masking (vectorized and scalar paths)" {
 
     // Ensure identical
     try testing.expectEqualSlices(u8, &[_]u8{ 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99 }, &buf);
+}
+
+test "Frame: masking respects key rotation offset" {
+    var buf = [_]u8{ 0x00, 0x00, 0x00, 0x00, 0x00 };
+    const key = root.MaskingKey{ 0x1, 0x2, 0x3, 0x4 };
+
+    root.mask(&buf, key, 3);
+    try testing.expectEqualSlices(u8, &[_]u8{ 0x4, 0x1, 0x2, 0x3, 0x4 }, &buf);
+}
+
+test "Frame: serialized size boundaries" {
+    try testing.expectEqual(2, root.get_serialized_size(0, false));
+    try testing.expectEqual(6, root.get_serialized_size(125, true));
+    try testing.expectEqual(4, root.get_serialized_size(126, false));
+    try testing.expectEqual(8, root.get_serialized_size(126, true));
+    try testing.expectEqual(10, root.get_serialized_size(65536, false));
+    try testing.expectEqual(14, root.get_serialized_size(65536, true));
+}
+
+test "Connection: stream extended headers before payload" {
+    var nodes: [1]root.Conn.FrameNode = undefined;
+    var conn = try init_conn(&nodes, .client, 1024, 1024);
+
+    try testing.expectEqual(root.RxAction.need_header, try load_header(&conn, &[_]u8{ 0x81, 0x7e }));
+    try testing.expectEqual(root.RxAction.need_payload, try load_header(&conn, &[_]u8{ 0x00, 0x80 }));
 }
 
 test "Frame: reject inconsistent extended length markers before writing" {
@@ -686,14 +724,7 @@ test "Benchmark: Multi-Session Ping/Pong Throughput & Latency" {
     const elapsed_s = @as(f64, @floatFromInt(test_end - test_start)) / 1_000_000_000.0;
     const ops_per_sec = @as(f64, @floatFromInt(total_ops)) / elapsed_s;
 
-    // Statistics Calculation
-    const Sorter = struct {
-        fn lessThan(context: void, a: u64, b: u64) bool {
-            _ = context;
-            return a < b;
-        }
-    };
-    std.mem.sort(u64, latencies, {}, Sorter.lessThan);
+    std.mem.sort(u64, latencies, {}, std.sort.asc(u64));
 
     const min_lat = latencies[0];
     const max_lat = latencies[latencies.len - 1];

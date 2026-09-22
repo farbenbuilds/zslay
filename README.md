@@ -21,6 +21,14 @@ This project strictly adheres to Data-Oriented Design principles to squeeze out 
 - **Cache-Efficient:** Eliminates pointer chasing. We use explicit, small integers (`u16`, `u32`) as indices for state tracking to maximize CPU L1/L2 cache locality.
 - **Flat Layouts:** Heavy usage of `packed struct` mapped directly to hardware/protocol byte boundaries (e.g., `FrameHeader`).
 
+## Functional Core, Imperative Shell
+
+The core is organized as pure functions around explicit state:
+- **Pure Transformations:** Encoding, decoding, length resolution, and XOR masking are stateless functions over caller-owned buffers with explicit error sets.
+- **Explicit State:** The only mutable state lives in the caller-provided connection context and bounded queue. No globals, no hidden mutation, no dynamic dispatch.
+- **Iterative Control Flow:** The RX/TX state machines use early returns and flat loops instead of recursion, keeping stack usage constant.
+- **No Silent Fallbacks:** Invalid protocol input returns a typed error instead of a substituted default.
+
 ## An Improved RFC6455 Implementation
 
 `zslay` is not just a port; it's an enhancement over traditional implementations:
