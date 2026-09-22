@@ -92,6 +92,17 @@ pre-commit run --all-files
 
 ```
 
+## AI Agent Workflows
+
+Specialized sub-agents are defined in `.opencode/agents/` and follow the same rules as human contributors: one scope per change, `zig fmt --check .`, and `zig build test` before review.
+
+- Use `zslay-parser`, `zslay-event-loop`, `zslay-c-abi`, `zslay-node-api`, `zslay-testing`, `zslay-release`, and `zslay-docs` for isolated work in their owned paths.
+- Use `zslay-review` (read-only) before opening or merging a pull request.
+- Agents hand cross-scope changes to the owning agent instead of editing outside their scope.
+- Do not let an agent commit, push, tag, or open a pull request unless you explicitly asked for it.
+
+The roster, owned paths, delegation rules, and skill coverage matrix live in [AGENT_DIRECTORY.md](AGENT_DIRECTORY.md).
+
 ## Commit Convention
 
 Angular-style conventional commits. Format: `<type>(<scope>): <subject>`

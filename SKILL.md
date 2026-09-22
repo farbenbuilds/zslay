@@ -25,3 +25,20 @@ This document provides a summary of all the available AI agent skills configured
 - **context7**: Retrieve up-to-date documentation for software libraries, frameworks, and components.
 - **dod**: Apply Data-Oriented Design (DoD) to optimize memory layout, data locality, and throughput while making ownership-aware performance decisions.
 - **github-git**: Rules for Git and GitHub workflows. Enforces checks, correct formatting, and clean history before pushing code.
+
+## Sub-Agent Directory
+
+`.opencode/agents/` defines eight sub-agents that load these skills explicitly before editing:
+
+| Agent | Area | Skills |
+| --- | --- | --- |
+| `zslay-parser` | Pure parser core (`src/types.zig`, `src/frame.zig`, `src/queue.zig`) | zslay-style, zslay-dod, dod, wslay-porting, Pragmatic Functional Programming, zig-0.16, zig-best-practices |
+| `zslay-event-loop` | RX/TX state machine (`src/event.zig`) | zslay-style, zslay-dod, dod, Pragmatic Functional Programming, zig-0.16, zig-best-practices |
+| `zslay-c-abi` | C exports and header (`src/c_api.zig`, `include/zslay.h`) | zslay-c-ffi, zslay-style, zig-0.16, zig-best-practices |
+| `zslay-node-api` | Node-API bindings (`bindings/node/`) | zslay-c-ffi, nix-hermetic, nix-best-practices, zig-0.16, zig-best-practices, context7 |
+| `zslay-testing` | Test suite (`src/test.zig`) | zig-testing, zslay-style, zslay-dod, zig-0.16, zig-best-practices |
+| `zslay-review` | Read-only review of changed files | zslay-style, zslay-dod, zslay-c-ffi, Pragmatic Functional Programming, ponytail, github-git |
+| `zslay-release` | Build, packaging, CI (`build.zig`, `flake.nix`, `.github/`) | nix-hermetic, nix-best-practices, github-git, ponytail |
+| `zslay-docs` | Documentation (root `*.md` guides) | github-git, caveman, ponytail, context7 |
+
+Every skill above is assigned to at least one agent. See `AGENT_DIRECTORY.md` for delegation rules, ownership boundaries, and the full coverage matrix.

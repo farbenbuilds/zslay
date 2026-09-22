@@ -10,6 +10,10 @@ Core code must remain zero-allocation and I/O-agnostic. Use caller-provided buff
 
 `src/frame.zig` must stay pure: given the same input it returns the same output and writes only into caller-owned buffers. All mutation lives in `src/queue.zig` and `src/event.Conn`, reached exclusively through caller-provided context pointers. Use flat iterative loops with early returns; recursion, dynamic dispatch, and silent fallbacks are prohibited. Invalid input returns a typed error instead of a substituted default.
 
+## Sub-Agent Directory
+
+`.opencode/agents/` defines specialized sub-agents: `zslay-parser` (pure parser core), `zslay-event-loop` (RX/TX state machine), `zslay-c-abi` (C exports and header), `zslay-node-api` (Node-API bindings), `zslay-testing` (test suite), `zslay-review` (read-only review), `zslay-release` (build and CI), and `zslay-docs` (documentation). Each agent loads its listed skills from `.agents/skills/` before editing and verifies with `zig build test` and `zig fmt --check .`. See `AGENT_DIRECTORY.md` for the roster, ownership map, and skill coverage matrix. Keep one agent per pull request scope and hand cross-scope work to the owning agent.
+
 ## Build, Test, and Development Commands
 
 Enter the pinned Zig 0.16.0 environment before development:

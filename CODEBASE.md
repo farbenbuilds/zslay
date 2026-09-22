@@ -44,4 +44,6 @@ Types are plain, top-level declarations with explicit names. Repeated or inline 
 - `SECURITY.md`, `CHANGELOG.md`, and `LICENSE` cover reporting, releases, and licensing.
 - `CI_CD_PIPELINE.md` documents CI and publishing; `.github/` contains workflows and community templates.
 - `AGENTS.md`, `SKILL.md`, `.agents/`, and `skills-lock.json` contain repository-specific AI agent guidance.
+- `AGENT_DIRECTORY.md` maps the specialized sub-agents to owned paths, delegation rules, and skill coverage.
+- `.opencode/agents/` holds the sub-agent definitions that opencode discovers for this project.
 - `misc/zslay-banner.png` is the README banner asset.
