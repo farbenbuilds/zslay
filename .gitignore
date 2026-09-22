@@ -12,3 +12,6 @@ zig-cache/
 *.a
 *.so
 result
+
+# graphify knowledge graph output
+graphify-out/
