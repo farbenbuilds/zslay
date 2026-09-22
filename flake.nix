@@ -33,7 +33,6 @@
           p.mkShell {
             packages = [
               zig
-              p.pre-commit
               p.zls
               p.gnutar
               p.bzip2
