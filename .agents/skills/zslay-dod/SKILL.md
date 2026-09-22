@@ -12,3 +12,4 @@ description: >
 3. **Index over pointer**: Track state using small explicit integers (e.g., `u16` index).
 4. **Zero-Allocation**: No `std.heap` allocators. Use bounded ring buffers or pre-allocated static contexts provided by the library consumer.
 5. **Static Dispatch**: Optimize branch prediction by using `switch` on non-exhaustive enums instead of virtual dispatch (`vtable`).
+6. **Pure Core**: Keep parsing transforms pure (`src/frame.zig`); confine mutation to caller-provided contexts (`src/queue.zig`, `src/event.Conn`). No globals, hidden state, or silent fallbacks.

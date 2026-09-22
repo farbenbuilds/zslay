@@ -6,14 +6,18 @@
 
 Incoming bytes move through `event.Conn`, which collects a header, delegates validation and decoding to `frame.zig`, and returns an `RxAction` telling the caller what to provide or consume next. Outgoing frames are prepared by `event.Conn`, stored in the caller-backed queue, and exposed through `TxAction`. `c_api.zig` adapts this flow to C callbacks and opaque pointers.
 
+## Functional Core
+
+`src/frame.zig` and the pure helpers in `src/event.zig` are side-effect free: the same input always produces the same output, and writes target only caller-owned buffers. Mutation is confined to `src/queue.zig` and `src/event.Conn`, which operate exclusively on caller-provided storage. Parser paths use flat iterative loops with early returns; recursion, dynamic dispatch, and silent fallbacks are not used, and invalid input yields a typed error.
+
 ## Source Files
 
 | File | Purpose |
 | --- | --- |
 | `src/types.zig` | Defines RFC 6455 opcodes, close codes, parser errors, packed frame headers, and masking keys. |
-| `src/frame.zig` | Encodes and decodes frame headers, calculates serialized sizes, and masks payloads in place. |
+| `src/frame.zig` | Pure functions that encode and decode frame headers, resolve canonical lengths, calculate serialized sizes, and mask payloads in place. |
 | `src/queue.zig` | Implements a generic bounded deque over caller-provided storage; it performs no allocation. |
-| `src/event.zig` | Holds the receive/transmit state machine, connection context, outgoing frame nodes, and static actions. |
+| `src/event.zig` | Holds the iterative receive/transmit state machine, connection context, outgoing frame nodes, and static actions. |
 | `src/c_api.zig` | Exports the role-aware, bounded C ABI and bridges callbacks and caller-owned memory to the Zig state machine. |
 | `src/root.zig` | Defines the public Zig module and re-exports the supported API. |
 | `src/test.zig` | Tests layouts, queues, frame encoding/decoding, masking, throughput, and malformed-input resilience. |

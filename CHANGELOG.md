@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-09-22
+
+### Added
+
+- Pure helpers `frame.read_length` and `event.header_bytes_needed` that isolate payload-length resolution and header sizing from state mutation.
+- Native tests for masking-key rotation offsets, serialized-size boundaries, queue `push_front`/`pop_back`, and extended-header streaming.
+
+### Changed
+
+- The RX state machine advances through a flat iterative loop instead of recursion; TX queue draining remains iterative.
+- `event.Conn.queue_frame` declares its explicit error set (`types.Error || error{QueueFull}`); the benchmark uses `std.sort.asc` instead of a bespoke comparator struct.
+- `src/c_api.zig` names the chunk-size constant and flattens the masked and unmasked send paths while preserving callback over-report validation.
+- Removed the redundant root-module analysis block and refreshed the human and LLM documentation.
+
 ## [0.1.5] - 2026-08-29
 
 ### Security

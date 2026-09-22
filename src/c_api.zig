@@ -2,6 +2,8 @@ const types = @import("types.zig");
 const frame = @import("frame.zig");
 const event = @import("event.zig");
 
+const chunk_size_max: usize = 4096;
+
 pub const ResultOk: c_int = 0;
 pub const ResultProgress: c_int = 1;
 pub const ResultProtocolError: c_int = -1;
@@ -152,9 +154,9 @@ pub export fn zslay_conn_recv(conn_ptr: ?*anyopaque) c_int {
         },
         .need_payload => {
             const decoded = conn.decoded_header orelse return ResultProtocolError;
-            const remaining = decoded.extended_len - conn.payload_bytes_processed;
+            const remaining: u64 = decoded.extended_len - conn.payload_bytes_processed;
 
-            var chunk_buf: [4096]u8 = undefined;
+            var chunk_buf: [chunk_size_max]u8 = undefined;
             const chunk_size: usize = @intCast(@min(chunk_buf.len, remaining));
             const read = conn_impl.c_ctx.recv_fn(&chunk_buf, chunk_size, conn_impl.c_ctx.user_data);
             if (read < 0) return ResultCallbackError;
@@ -225,39 +227,39 @@ pub export fn zslay_conn_send(conn_ptr: ?*anyopaque) c_int {
             },
             .write_payload => {
                 const node = &conn.tx_queue.buffer[conn.tx_queue.head];
-                const remaining = node.payload.len - node.sent_payload;
+                const remaining: usize = node.payload.len - node.sent_payload;
                 const is_masked = (node.header_buf[1] & 0x80) != 0;
 
-                var sent_len: usize = 0;
-                if (is_masked) {
-                    var chunk_buf: [4096]u8 = undefined;
-                    const chunk_size = @min(chunk_buf.len, remaining);
-                    @memcpy(
-                        chunk_buf[0..chunk_size],
-                        node.payload[node.sent_payload .. node.sent_payload + chunk_size],
-                    );
-
-                    var key: types.MaskingKey = undefined;
-                    const key_index = node.header_size - key.len;
-                    @memcpy(&key, node.header_buf[key_index .. key_index + key.len]);
-                    frame.mask(chunk_buf[0..chunk_size], key, @intCast(node.sent_payload));
-
-                    const sent = conn_impl.c_ctx.send_fn(&chunk_buf, chunk_size, conn_impl.c_ctx.user_data);
-                    if (sent < 0) return ResultCallbackError;
-                    if (sent == 0) return ResultOk;
-
-                    sent_len = @intCast(sent);
-                    if (sent_len > chunk_size) return ResultCallbackError;
-                } else {
+                if (!is_masked) {
                     const to_send = node.payload[node.sent_payload .. node.sent_payload + remaining];
                     const sent = conn_impl.c_ctx.send_fn(to_send.ptr, to_send.len, conn_impl.c_ctx.user_data);
                     if (sent < 0) return ResultCallbackError;
                     if (sent == 0) return ResultOk;
 
-                    sent_len = @intCast(sent);
+                    const sent_len: usize = @intCast(sent);
                     if (sent_len > to_send.len) return ResultCallbackError;
+                    node.sent_payload += sent_len;
+                    continue;
                 }
 
+                var chunk_buf: [chunk_size_max]u8 = undefined;
+                const chunk_size: usize = @min(chunk_buf.len, remaining);
+                @memcpy(
+                    chunk_buf[0..chunk_size],
+                    node.payload[node.sent_payload .. node.sent_payload + chunk_size],
+                );
+
+                var key: types.MaskingKey = undefined;
+                const key_index = node.header_size - key.len;
+                @memcpy(&key, node.header_buf[key_index .. key_index + key.len]);
+                frame.mask(chunk_buf[0..chunk_size], key, @intCast(node.sent_payload));
+
+                const sent = conn_impl.c_ctx.send_fn(&chunk_buf, chunk_size, conn_impl.c_ctx.user_data);
+                if (sent < 0) return ResultCallbackError;
+                if (sent == 0) return ResultOk;
+
+                const sent_len: usize = @intCast(sent);
+                if (sent_len > chunk_size) return ResultCallbackError;
                 node.sent_payload += sent_len;
             },
             _ => return ResultProtocolError,

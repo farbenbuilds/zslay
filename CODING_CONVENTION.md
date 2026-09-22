@@ -42,12 +42,23 @@ For architecture see [CODEBASE.md](CODEBASE.md); for setup, workflows, and relea
 
 - **Early Returns (Guard Clauses)**: Handle errors first and return early to keep the "happy path" flat.
 - **Flat Nesting**: Avoid deep `if/else` blocks. Maximum 2 levels of indentation within a function body.
+- **Iteration over Recursion**: Parser and state machine loops must be iterative with early returns. Recursion is prohibited in parser paths.
 - **Error Handling**: Use Zig's `error` sets and `!`. **Never use `catch unreachable`** unless the condition is mathematically proven impossible.
 - **Resource Cleanup**: Use Zig's `defer` and `errdefer` in place of the traditional Linux Kernel `goto error_out` labels [8]. This guarantees cleanup on scope exit without spaghetti control flow.
 
 ---
 
-## 3. Memory and Allocations
+## 3. Functional Programming
+
+- **Pure Core**: Functions in `src/frame.zig` and pure helpers must not mutate external state or capture hidden globals. The same input must yield the same output, and writes go only into caller-owned buffers.
+- **Explicit State**: All mutable state lives in caller-provided contexts (`src/queue.zig`, `src/event.Conn`). Module-level mutable variables are prohibited.
+- **No Object-Oriented Constructs**: No inheritance, no vtables, no dynamic dispatch, no hidden receiver state. Zig methods are allowed only as thin, explicit transitions over caller-owned contexts.
+- **Typed Failures**: Public functions declare explicit error sets. Silent fallbacks (zero keys, truncation, default substitution) are prohibited.
+- **Deterministic Control Flow**: Prefer `switch` over non-exhaustive enums, early returns, and flat loops.
+
+---
+
+## 4. Memory and Allocations
 
 - **Zero-Allocation**: No hidden allocations. The parser must remain completely detached from memory allocators (`std.mem.Allocator`).
 - **I/O Agnostic**: The parser only operates on user-provided slices (`[]u8` or `[]const u8`). It reads and updates state, leaving actual I/O execution (such as using `std.Io` in Zig 0.16.0 [4]) and memory management entirely to the caller.
@@ -55,7 +66,7 @@ For architecture see [CODEBASE.md](CODEBASE.md); for setup, workflows, and relea
 
 ---
 
-## 4. Import Order and C ABI Boundaries
+## 5. Import Order and C ABI Boundaries
 
 - **Import Order**:
   1. Standard library (`const std = @import("std");`).
@@ -70,12 +81,13 @@ For architecture see [CODEBASE.md](CODEBASE.md); for setup, workflows, and relea
 
 ---
 
-## 5. Comments, Documentation & Restrictions
+## 6. Comments, Documentation & Restrictions
 
 ### Comments
 
 - **Self-documenting code**: Do not add inline comments (`//`) explaining logic inside function bodies. The code logic, variable names, and explicit types (`packed struct`, precise bit-widths) must be entirely self-documenting.
-- **Doc-strings**: **Only use `///` (doc comments) for functions and structures marked as `export` or `pub`**. This is mandatory so the Zig compiler can automatically generate documentation via the `-femit-docs` flag for API consumers.
+- **No Doc-strings**: `///` doc comments and block comments (`/* */`) are not used in this project. Always use `//`, and only where a short note is genuinely required (maximum 2 lines per comment block).
+- **Explicit Types**: Public functions declare explicit parameter, return, and error-set types; do not rely on inferred error sets or implicit coercions at API boundaries.
 
 ### Emojis
 
@@ -88,13 +100,12 @@ For architecture see [CODEBASE.md](CODEBASE.md); for setup, workflows, and relea
 
 ---
 
-## 6. Code Snippet Example
+## 7. Code Snippet Example
 
 ```zig
 const std = @import("std");
 
-/// WsFrameHeader - Contains the basic header information of a WebSocket frame.
-/// This structure crosses the FFI boundary and uses explicit static typing.
+// WsFrameHeader contains the basic header information of a WebSocket frame.
 pub const WsFrameHeader = packed struct(u16) {
     fin: bool,
     reserved: u3,
@@ -103,27 +114,17 @@ pub const WsFrameHeader = packed struct(u16) {
     payload_length: u7,
 };
 
-/// zslay_parse_frame_header - Parses the input byte buffer to extract header information.
+// zslay_parse_frame_header parses the input byte buffer to extract header information.
 pub export fn zslay_parse_frame_header(buffer_ptr: [*]const u8, len: usize) c_int {
+    if (len < 2) return -1;
+
     const buffer = buffer_ptr[0..len];
+    const header_int = std.mem.readInt(u16, buffer[0..2][0..2], .little);
+    const header: WsFrameHeader = @bitCast(header_int);
 
-    if (buffer.len < 2) {
-        return -1;
-    }
-
-    // All parsing operations must be zero-allocation
-    var header: WsFrameHeader = undefined;
-    header.fin = (buffer[0] & 0x80) != 0;
-    header.opcode = @as(u4, @truncate(buffer[0] & 0x0F));
-
-    // Always use static dispatch (switch) instead of function pointers
     switch (header.opcode) {
-        1, 2 => {
-            return 0;
-        },
-        else => {
-            return -2;
-        },
+        1, 2 => return 0,
+        else => return -2,
     }
 }
 ```

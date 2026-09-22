@@ -23,6 +23,22 @@ pub const RxState = enum(u8) {
     read_payload = 2,
 };
 
+// Pure: derives the total header byte count from the second base header byte
+fn header_bytes_needed(b1: u8) usize {
+    const base_len = b1 & 0x7f;
+
+    var needed: usize = 2;
+    if (base_len == 126) {
+        needed += 2;
+    } else if (base_len == 127) {
+        needed += 8;
+    }
+
+    if ((b1 & 0x80) != 0) needed += 4;
+
+    return needed;
+}
+
 // Zero-allocation, I/O-agnostic WebSocket connection context
 // Coordinates frame streaming, XOR masking, and intrusive TX queueing.
 pub const Conn = struct {
@@ -119,46 +135,36 @@ pub const Conn = struct {
         self.rx_state = .read_payload;
     }
 
-    // Drives the RX state machine and returns the next required action
+    // Drives the RX state machine iteratively and returns the next required action
     pub fn advance_rx(self: *Conn) types.Error!RxAction {
-        switch (self.rx_state) {
-            .read_base_header => {
-                if (self.header_bytes_read < self.header_bytes_needed) return RxAction.need_header;
+        while (true) {
+            switch (self.rx_state) {
+                .read_base_header => {
+                    if (self.header_bytes_read < self.header_bytes_needed) return RxAction.need_header;
 
-                const b1 = self.header_buf[1];
-                const base_len = b1 & 0x7f;
-                const mask_flag = (b1 & 0x80) != 0;
+                    self.header_bytes_needed = header_bytes_needed(self.header_buf[1]);
 
-                var needed: usize = 2;
-                if (base_len == 126) {
-                    needed += 2;
-                } else if (base_len == 127) needed += 8;
+                    if (self.header_bytes_needed > 2) {
+                        self.rx_state = .read_extended_header;
+                        return RxAction.need_header;
+                    }
 
-                if (mask_flag) needed += 4;
-                self.header_bytes_needed = needed;
+                    try self.accept_header();
+                },
+                .read_extended_header => {
+                    if (self.header_bytes_read < self.header_bytes_needed) return RxAction.need_header;
 
-                if (needed > 2) {
-                    self.rx_state = .read_extended_header;
-                    return RxAction.need_header;
-                }
+                    try self.accept_header();
+                },
+                .read_payload => {
+                    const decoded = self.decoded_header orelse return error.ProtocolError;
+                    if (self.payload_bytes_processed > decoded.extended_len) return error.InvalidLength;
 
-                try self.accept_header();
-                return self.advance_rx();
-            },
-            .read_extended_header => {
-                if (self.header_bytes_read < self.header_bytes_needed) return RxAction.need_header;
-
-                try self.accept_header();
-                return self.advance_rx();
-            },
-            .read_payload => {
-                const decoded = self.decoded_header orelse return error.ProtocolError;
-                if (self.payload_bytes_processed > decoded.extended_len) return error.InvalidLength;
-
-                const remaining = decoded.extended_len - self.payload_bytes_processed;
-                if (remaining == 0) return RxAction.emit_frame;
-                return RxAction.need_payload;
-            },
+                    const remaining = decoded.extended_len - self.payload_bytes_processed;
+                    if (remaining == 0) return RxAction.emit_frame;
+                    return RxAction.need_payload;
+                },
+            }
         }
     }
 
@@ -301,7 +307,7 @@ pub const Conn = struct {
     }
 
     // Validates wire order before appending an outgoing frame
-    pub fn queue_frame(self: *Conn, node: FrameNode) !void {
+    pub fn queue_frame(self: *Conn, node: FrameNode) (types.Error || error{QueueFull})!void {
         const next_fragment = try self.validate_outgoing_node(node);
         try self.tx_queue.push_back(node);
         self.tx_fragmented_opcode = next_fragment.opcode;
@@ -343,7 +349,7 @@ pub const Conn = struct {
         const header_struct = types.FrameHeader{
             .payload_len = base_len,
             .mask = is_masked,
-            .opcode = @intCast(@intFromEnum(opcode)),
+            .opcode = @intFromEnum(opcode),
 
             .rsv3 = false,
             .rsv2 = false,
