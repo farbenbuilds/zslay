@@ -30,6 +30,19 @@
 
         zig = inputs.zig-overlay.packages.${system}."0.16.0";
 
+        mkDevShell = p:
+          p.mkShell {
+            packages = [
+              zig
+              pkgs.zls
+              pkgs.gnutar
+              pkgs.bzip2
+              pkgs.gzip
+              pkgs.xz
+              pkgs.zip
+            ];
+          };
+
         mkZigBuild = name: target: p:
           p.stdenv.mkDerivation {
             inherit name;
@@ -80,17 +93,13 @@
             };
           };
 
-        devShells.default = pkgs.mkShell {
-          packages = [
-            zig
-            pkgs.zls
-            pkgs.gnutar
-            pkgs.bzip2
-            pkgs.gzip
-            pkgs.xz
-            pkgs.zip
-          ];
-        };
+        devShells =
+          {
+            default = mkDevShell pkgs;
+          }
+          // pkgs.lib.optionalAttrs isLinux {
+            musl = mkDevShell pkgsMusl;
+          };
 
         packages =
           {
