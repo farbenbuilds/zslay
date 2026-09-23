@@ -61,7 +61,7 @@ Runs after `verify` succeeds.
    - `macos-x86_64` -> builds `libzslay-x86_64-macos.a`
    - `macos-aarch64` -> builds `libzslay-aarch64-macos.a`
    - `windows-x86_64` -> builds `zslay-x86_64-windows.lib`
-3. Packages Linux and macOS artifacts exclusively into cross-platform archives (`.tar.bz2`, `.tar.gz`, `.tar.xz`) utilizing hermetic tools (`gnutar`, `bzip2`, `gzip`, `xz`). Windows targets are packaged into `.zip` archives utilizing the `zip` tool. All tools are provided via `flake.nix` dev shells. The raw `.a`/`.lib` files are strictly omitted from the payload.
+3. Packages Linux and macOS artifacts exclusively into cross-platform archives (`.tar.bz2`, `.tar.gz`, `.tar.xz`) utilizing hermetic tools (`gnutar`, `bzip2`, `gzip`, `xz`). Windows targets are packaged into `.zip` archives utilizing the `zip` tool. All tools are provided via the `flake.nix` dev shell. The raw `.a`/`.lib` files are strictly omitted from the payload.
 4. Uploads the archives as workflow artifacts for the `release` job.
 
 ### Job: `release`

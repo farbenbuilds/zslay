@@ -5,6 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
     zig-overlay.url = "github:mitchellh/zig-overlay";
+    zig-overlay.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = inputs @ {flake-parts, ...}:
@@ -28,19 +29,6 @@
           else null;
 
         zig = inputs.zig-overlay.packages.${system}."0.16.0";
-
-        mkDevShell = p:
-          p.mkShell {
-            packages = [
-              zig
-              p.zls
-              p.gnutar
-              p.bzip2
-              p.gzip
-              p.xz
-              p.zip
-            ];
-          };
 
         mkZigBuild = name: target: p:
           p.stdenv.mkDerivation {
@@ -92,13 +80,17 @@
             };
           };
 
-        devShells =
-          {
-            default = mkDevShell pkgs;
-          }
-          // pkgs.lib.optionalAttrs isLinux {
-            musl = mkDevShell pkgsMusl;
-          };
+        devShells.default = pkgs.mkShell {
+          packages = [
+            zig
+            pkgs.zls
+            pkgs.gnutar
+            pkgs.bzip2
+            pkgs.gzip
+            pkgs.xz
+            pkgs.zip
+          ];
+        };
 
         packages =
           {
