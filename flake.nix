@@ -5,6 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
     zig-overlay.url = "github:mitchellh/zig-overlay";
+    zig-overlay.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = inputs @ {flake-parts, ...}:
@@ -33,12 +34,12 @@
           p.mkShell {
             packages = [
               zig
-              p.zls
-              p.gnutar
-              p.bzip2
-              p.gzip
-              p.xz
-              p.zip
+              pkgs.zls
+              pkgs.gnutar
+              pkgs.bzip2
+              pkgs.gzip
+              pkgs.xz
+              pkgs.zip
             ];
           };
 
