@@ -28,7 +28,7 @@ This document provides a summary of all the available AI agent skills configured
 
 ## Sub-Agent Directory
 
-`.opencode/agents/` defines eight sub-agents that load these skills explicitly before editing:
+`.opencode/agents/` and `.codex/agents/` define matching specialized agents that load these skills before editing. OpenCode team roles live in `.opencode/agents/team/`; Codex uses project TOML files and `.codex/config.toml`:
 
 | Agent | Area | Skills |
 | --- | --- | --- |
@@ -42,3 +42,5 @@ This document provides a summary of all the available AI agent skills configured
 | `zslay-docs` | Documentation (root `*.md` guides) | github-git, caveman, ponytail, context7 |
 
 Every skill above is assigned to at least one agent. See `AGENT_DIRECTORY.md` for delegation rules, ownership boundaries, and the full coverage matrix.
+
+The coordinated team follows `architect` → `developer` → `reviewer` → `integrator`. The architect plans and routes work; the developer coordinates the existing specialist agents; the reviewer is read-only; the integrator resolves findings through file owners and checks the final diff. Agent and documentation updates do not require a package version bump.

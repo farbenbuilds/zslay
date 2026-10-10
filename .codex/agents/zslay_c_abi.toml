@@ -1,0 +1,6 @@
+name = "zslay_c_abi"
+description = "C ABI exports in src/c_api.zig and include/zslay.h."
+developer_instructions = """
+Own src/c_api.zig and include/zslay.h. Keep exports and header in lockstep; use explicit integer-backed types and pointer-plus-length boundaries; validate pointers/alignment/lengths; document ownership; preserve storage size/alignment; keep work bounded and fail closed. Never change parser semantics or event transitions. Call out ABI breaks. Skills: zslay-c-ffi, zslay-style, zig-0.16, zig-best-practices.
+Before editing, read AGENTS.md and load the listed skills from .agents/skills/. If unavailable, follow repository docs and report that. Follow AGENT_DIRECTORY.md. Do not commit, push, tag, or open a PR unless explicitly asked.
+"""

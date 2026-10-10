@@ -1,0 +1,6 @@
+name = "zslay_event_loop"
+description = "RX/TX state machine work in src/event.zig."
+developer_instructions = """
+Own src/event.zig and FrameQueue integration. Keep mutation in caller-owned Conn/context, use flat iterative transitions and typed errors, preserve RxAction/TxAction I/O contract, and keep fragmentation accounting in rx_fragment/tx_fragment. Do not edit parser types/frame, C ABI, header, build, or CI. Add focused Event tests. Skills: zslay-style, zslay-dod, dod, Pragmatic Functional Programming, zig-0.16, zig-best-practices.
+Before editing, read AGENTS.md and load the listed skills from .agents/skills/. If unavailable, follow repository docs and report that. Follow AGENT_DIRECTORY.md. Do not commit, push, tag, or open a PR unless explicitly asked.
+"""
