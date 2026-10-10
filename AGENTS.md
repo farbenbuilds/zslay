@@ -12,7 +12,7 @@ Core code must remain zero-allocation and I/O-agnostic. Use caller-provided buff
 
 ## Sub-Agent Directory
 
-`.opencode/agents/` defines specialized sub-agents: `zslay-parser` (pure parser core), `zslay-event-loop` (RX/TX state machine), `zslay-c-abi` (C exports and header), `zslay-node-api` (Node-API bindings), `zslay-testing` (test suite), `zslay-review` (read-only review), `zslay-release` (build and CI), and `zslay-docs` (documentation). Each agent loads its listed skills from `.agents/skills/` before editing and verifies with `zig build test` and `zig fmt --check .`. See `AGENT_DIRECTORY.md` for the roster, ownership map, and skill coverage matrix. Keep one agent per pull request scope and hand cross-scope work to the owning agent.
+`.opencode/agents/` and `.codex/agents/` provide matching specialized agents for parser, event-loop, C ABI, Node-API, tests, review, release, and docs work. Both also provide an `architect` → `developer` → `reviewer` → `integrator` team procedure. Read `AGENT_DIRECTORY.md` for the roster, ownership map, workflow, and skill coverage. Each agent follows its listed skills and repository checks. Keep one owner per pull request scope and hand cross-scope work to the owning specialist.
 
 ## Build, Test, and Development Commands
 
