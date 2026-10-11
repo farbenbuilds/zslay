@@ -1,0 +1,12 @@
+{
+  "benchmark": "zslay-echo",
+  "records": [
+    {
+      "record_id": "38105163229-1-bb2a0c7abc01",
+      "record_path": "records/2026/38105163229-1-bb2a0c7abc01.json",
+      "recorded_at": "2026-10-11T02:28:32Z",
+      "source_sha": "bb2a0c7abc01274578af60a9e5b0f5c344d4754a"
+    }
+  ],
+  "schema_version": 1
+}
