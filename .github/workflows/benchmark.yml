@@ -189,7 +189,7 @@ jobs:
             git switch -c benchmark-data
           else
             git switch --orphan benchmark-data
-            git rm -rf .
+            git rm -rf --ignore-unmatch .
           fi
 
       - name: Add immutable record and update pointers
