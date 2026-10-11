@@ -9,6 +9,8 @@
         "build.zig.zon",
         "include",
         "src",
+        "benchmarks",
+        "scripts",
         "LICENSE",
         "README.md",
     },

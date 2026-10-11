@@ -86,12 +86,32 @@ zig build test
 ```
 *This also compiles, links, and runs the C11 ABI smoke test (`src/c_api_smoke.c`) against the installed `zslay.h` and static library.*
 
-**5. Run the benchmark**
+**5. Run the in-process benchmark**
 ```bash
-zig build bench
+zig build bench -Doptimize=ReleaseFast
 ```
 
-**6. Format the code**
+The benchmark prints JSON results for fixed WebSocket core operations: masked header encoding and decoding, 1 KiB payload masking, and receive state transitions. It reports median nanoseconds per operation and derived operations per second. See the [core benchmark contract](benchmarks/CONTRACT.md) for the cases and method.
+
+**6. Run a network echo benchmark case**
+
+Build and start the loopback server adapter in one shell:
+
+```bash
+zig build bench-echo -Doptimize=ReleaseFast
+zig-out/bin/zslay-echo-server --port 9001
+```
+
+After it prints `READY 9001`, use another shell to run the independent Python client:
+
+```bash
+python3 scripts/benchmark_echo.py --port 9001 --connections 64 \
+  --payload-size 1024 --duration 5 --warmup 1 --output echo.json
+```
+
+The [echo benchmark contract](benchmarks/ECHO_CONTRACT.md) defines the full 1/64-connection by 128/1024-byte matrix, validation, metrics, and automated history. The echo rates include local socket and client costs; compare them only with compatible echo results.
+
+**7. Format the code**
 ```bash
 zig fmt .
 ```
