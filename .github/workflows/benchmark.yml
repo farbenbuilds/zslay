@@ -200,11 +200,12 @@ jobs:
           python3 scripts/benchmark_history.py publish-echo \
             --record evidence/echo-record.json --history history \
             --contract benchmarks/ECHO_CONTRACT.md
+          python3 scripts/benchmark_history.py render-readme --history history
 
       - name: Push history
         working-directory: history
         run: |
-          git add records contracts index.json latest.json echo
+          git add README.md records contracts index.json latest.json echo
           if git diff --cached --quiet; then
             exit 0
           fi

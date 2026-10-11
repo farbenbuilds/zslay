@@ -139,6 +139,47 @@ class BenchmarkHistoryTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "echo sample has errors"):
             benchmark_history.publish_echo(self.args)
 
+    def test_readme_shows_latest_results_and_regenerates_without_new_run(self):
+        self.data["github"] = {"repository": "farbenbuilds/zslay", "run_id": "123"}
+        self.record.write_text(json.dumps(self.data))
+        benchmark_history.publish(self.args)
+        sample = {
+            "duration_seconds": 5.01, "operations": 100, "errors": 0, "ops_per_sec": 19.96,
+            "rtt_ns": {"p50": 1000, "p95": 2000, "p99": 3000},
+        }
+        echo = {
+            **self.data, "benchmark": "zslay-echo", "duration_seconds": 5, "warmup_seconds": 1,
+            "repetitions": 3,
+            "cases": [{
+                "schema_version": 1, "benchmark": "zslay-echo",
+                "name": f"echo_{connections}c_{size}b", "connections": connections,
+                "payload_bytes": size, "duration_seconds": 5, "warmup_seconds": 1,
+                "repetitions": 3, "samples": [sample] * 3, "ops_per_sec": 19.96,
+                "errors": 0, "rtt_ns": sample["rtt_ns"],
+            } for connections in (1, 64) for size in (128, 1024)],
+        }
+        self.record.write_text(json.dumps(echo))
+        benchmark_history.publish_echo(self.args)
+        args = argparse.Namespace(history=self.history)
+        benchmark_history.render_readme(args)
+        readme = (self.history / "README.md").read_text()
+        self.assertIn("| `mask_payload` | 64 | 2.50 | 400,000,000 |", readme)
+        self.assertIn("| 64 | 1,024 | 20 | 1.00 | 2.00 | 3.00 |", readme)
+        self.assertIn("[JSON](records/2026/123-1-abcdefabcdef.json)", readme)
+        self.assertIn("[JSON](echo/records/2026/123-1-abcdefabcdef.json)", readme)
+        self.assertIn("[Latest core JSON](latest.json)", readme)
+        self.assertIn("[Latest echo JSON](echo/latest.json)", readme)
+        self.assertIn("https://github.com/farbenbuilds/zslay/actions/runs/123", readme)
+        benchmark_history.render_readme(args)
+        self.assertEqual((self.history / "README.md").read_text(), readme)
+        core_path = self.history / "latest.json"
+        core = json.loads(core_path.read_text())
+        core["github"]["repository"] = "far ben/zslay"
+        core_path.write_text(json.dumps(core))
+        with self.assertRaisesRegex(ValueError, "invalid GitHub repository"):
+            benchmark_history.render_readme(args)
+        self.assertEqual((self.history / "README.md").read_text(), readme)
+
 
 if __name__ == "__main__":
     unittest.main()

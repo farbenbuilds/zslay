@@ -43,4 +43,6 @@ The [benchmark workflow](../.github/workflows/benchmark.yml) runs the fixed echo
 
 On scheduled and manually dispatched `main` runs, a separate bot job publishes validated results to the `benchmark-data` branch. Echo data has its own `echo/records/YYYY/` immutable records, `echo/contracts/` content-addressed contract snapshots, `echo/index.json`, and `echo/latest.json`. Each record carries source revision, run metadata, runner and toolchain details, raw samples, and the checksum of this contract. Core results remain in the branch root; the two histories are separate.
 
+The bot-generated [results README](https://github.com/farbenbuilds/zslay/tree/benchmark-data) displays the latest echo cases and recent runs alongside the separate core suite. Its links lead to `echo/latest.json`, immutable records, and this workload contract for complete results.
+
 GitHub-hosted runners vary in CPU model, load, and scheduling. Interpret trends within matching hardware and toolchain cohorts. The numbers describe this one loopback adapter and client workload; they do not rank WebSocket frameworks or claim public-network capacity.

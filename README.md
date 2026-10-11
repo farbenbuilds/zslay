@@ -111,6 +111,8 @@ python3 scripts/benchmark_echo.py --port 9001 --connections 64 \
 
 The [echo benchmark contract](benchmarks/ECHO_CONTRACT.md) defines the full 1/64-connection by 128/1024-byte matrix, validation, metrics, and automated history. The echo rates include local socket and client costs; compare them only with compatible echo results.
 
+See the [benchmark results](https://github.com/farbenbuilds/zslay/tree/benchmark-data) for the latest core and echo measurements and recent runs. GitHub Actions generates that branch's README after scheduled and manually dispatched runs on `main`; its [core JSON](https://github.com/farbenbuilds/zslay/blob/benchmark-data/latest.json) and [echo JSON](https://github.com/farbenbuilds/zslay/blob/benchmark-data/echo/latest.json) retain the full samples and environment metadata.
+
 **7. Format the code**
 ```bash
 zig fmt .
