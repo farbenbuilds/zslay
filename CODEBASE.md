@@ -25,14 +25,15 @@ Types are plain, top-level declarations with explicit names. Repeated or inline 
 | `src/c_api.zig` | Exports the role-aware, bounded C ABI and bridges the `Callbacks` struct and caller-owned `ZslayConn` storage to the Zig state machine. |
 | `src/root.zig` | Defines the public Zig module and re-exports the supported API. |
 | `src/test.zig` | Tests layouts, queues, frame encoding/decoding, masking, and malformed-input resilience. |
-| `src/bench.zig` | Standalone multi-session encode/decode benchmark reporting throughput and sampled latency percentiles; run with `zig build bench` and excluded from the unit test suite. |
+| `src/bench.zig` | Standalone, in-process benchmark for header operations, payload masking, and receive state transitions; prints JSON via `zig build bench -Doptimize=ReleaseFast` and is excluded from the unit test suite. |
+| `benchmarks/echo_server.c` | Loopback WebSocket echo adapter that drives the public C ABI from socket callbacks; built by `zig build bench-echo`. |
 | `src/c_api_smoke.c` | C11 ABI smoke test compiled and linked against the installed `zslay.h` and static library; executed by `zig build test`. |
 
 ## Build and Environment
 
 | File | Purpose |
 | --- | --- |
-| `build.zig` | Builds the Zig module and static C library; defines `test`, `bench`, and `check` steps. The `test` step also compiles, links, and runs the C ABI smoke test. |
+| `build.zig` | Builds the Zig module and static C library; defines `test`, `bench`, `bench-echo`, and `check` steps. The `test` step also compiles, links, and runs the C ABI smoke test. |
 | `build.zig.zon` | Stores package metadata, the minimum Zig version, and published paths. |
 | `include/zslay.h` | Declares the installed C ABI, callback contracts, result codes, storage alignment, and borrowed-memory lifetimes. |
 | `flake.nix`, `flake.lock` | Pin the Nix development shell, checks, formatter, and cross-platform release builds. |
@@ -45,6 +46,8 @@ Types are plain, top-level declarations with explicit names. Repeated or inline 
 - `CONTRIBUTE.md` and `CODING_CONVENTION.md` define the contributor workflow and style.
 - `SECURITY.md`, `CHANGELOG.md`, and `LICENSE` cover reporting, releases, and licensing.
 - `CI_CD_PIPELINE.md` documents CI and publishing; `.github/` contains workflows and community templates.
+- `benchmarks/CONTRACT.md` defines the in-process benchmark cases, result units, and history rules. Case definitions live in `src/bench.zig`; `scripts/benchmark_history.py` publishes results to the separate `benchmark-data` branch.
+- `benchmarks/ECHO_CONTRACT.md` defines the loopback echo workload and metrics. `scripts/benchmark_echo.py` supplies the independent standard-library client; the `benchmark-data` branch keeps echo records under `echo/`.
 - `AGENTS.md`, `SKILL.md`, `.agents/`, and `skills-lock.json` contain repository-specific AI agent guidance.
 - `AGENT_DIRECTORY.md` maps the specialized sub-agents to owned paths, delegation rules, and skill coverage.
 - `.opencode/agents/` holds the sub-agent definitions that opencode discovers for this project.

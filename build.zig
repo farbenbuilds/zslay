@@ -66,6 +66,24 @@ pub fn build(b: *std.Build) void {
     const bench_step = b.step("bench", "Build and run the zslay benchmark");
     bench_step.dependOn(&b.addRunArtifact(bench).step);
 
+    // Build the localhost WebSocket echo adapter used by the network benchmark.
+    const echo_server = b.addExecutable(.{
+        .name = "zslay-echo-server",
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+    });
+    echo_server.root_module.addCSourceFile(.{
+        .file = b.path("benchmarks/echo_server.c"),
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra" },
+    });
+    echo_server.root_module.addIncludePath(b.path("include"));
+    echo_server.root_module.linkLibrary(lib);
+    const echo_step = b.step("bench-echo", "Build the network echo benchmark server");
+    echo_step.dependOn(&b.addInstallArtifact(echo_server, .{}).step);
+
     // setup local unit tests
     const lib_tests = b.addTest(.{
         .root_module = b.createModule(.{

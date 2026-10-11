@@ -10,6 +10,7 @@ For the step-by-step release procedure, see [CONTRIBUTE.md](CONTRIBUTE.md); for 
 | --------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------- |
 | `.github/workflows/lint.yml`      | Pull request into `main` (Zig and build paths)   | Formatting check (`zig fmt --check .`) with Zig 0.16.0                  |
 | `.github/workflows/test.yml`      | Pull request into `main`, push to `main`         | Formatting gate, `nix flake check`, native and musl tests               |
+| `.github/workflows/benchmark.yml` | Pull request into `main`, nightly schedule, manual dispatch | Core and loopback echo benchmarks, PR artifacts, and `benchmark-data` history |
 | `.github/workflows/publish.yml`   | Push of a version tag matching `v*`              | Release verification, cross-platform build via Nix, GitHub release      |
 
 ## Lint Pipeline (`lint.yml`)
@@ -32,6 +33,16 @@ Tests the core parser logic, Data-Oriented Design (DOD) memory layouts, and stat
   - `nix flake check --print-build-logs`
 - Scope: `flake check` builds the native and musl `test` derivations, which run `zig build test`. That step executes all `test` blocks defined in `src/test.zig` and other Zig source files, and also compiles, links, and runs the C11 ABI smoke test `src/c_api_smoke.c`.
 - Pull-request path filter: Zig sources, flake files, workflows, `include/`, `build.zig`, and `**/*.c`.
+
+## Benchmark Pipeline (`benchmark.yml`)
+
+The workflow measures both Zig WebSocket core operations and local end-to-end echo round trips. The [core benchmark contract](benchmarks/CONTRACT.md) and [echo benchmark contract](benchmarks/ECHO_CONTRACT.md) define separate workloads and result units. The echo matrix uses 1 and 64 concurrent connections with 128- and 1024-byte binary payloads; each case has a 1-second warmup and three 5-second timed repetitions. The client checks the WebSocket upgrade and every echoed payload. Runs use the pinned Nix environment and `ReleaseFast` optimization. Distributed release artifacts continue to use `ReleaseSafe`.
+
+On pull requests into `main` that change benchmark-relevant paths, the read-only benchmark job runs both candidate suites. When the base revision has compatible suites, it runs those on the same runner and uploads advisory core and echo comparisons with raw results. The echo comparison reports each case's candidate-to-base operations-per-second ratio. There is no pass/fail performance threshold. Pull-request code never receives permission to publish history.
+
+Nightly and manually dispatched runs on `main` publish validated records through a separate bot job with `contents: write` permission. The target is the `benchmark-data` branch. Core records live at `records/YYYY/<run-id>-<attempt>-<sha12>.json`, with `contracts/`, `latest.json`, and `index.json` in the branch root. Echo records use the same layout under `echo/`, including a snapshot of `ECHO_CONTRACT.md` in `echo/contracts/`. Records include samples, contract checksum, source SHA, run details, runner CPU/image/kernel, Zig version, flake-lock hash, and optimization mode. A record ID is immutable: re-publishing identical content succeeds, while conflicting content fails.
+
+GitHub-hosted runner hardware and scheduling vary, so compare results within matching case and environment cohorts. Echo results include local socket, server-adapter, and client costs; they do not assert absolute server capacity or rank other frameworks. The contracts document local reproduction and result units.
 
 ## Release Pipeline (`publish.yml`)
 

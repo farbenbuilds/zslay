@@ -1,0 +1,214 @@
+name: Benchmark
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'build.zig'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'benchmarks/**'
+      - 'scripts/**'
+      - '.github/workflows/benchmark.yml'
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    name: Measure core operations
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Checkout PR base
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: baseline
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Test benchmark scripts
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'test_*.py'
+
+      - name: Run candidate benchmark
+        run: nix develop -c zig build bench -Doptimize=ReleaseFast > candidate.json
+
+      - name: Run candidate echo benchmark
+        run: |
+          nix develop -c zig build bench-echo -Doptimize=ReleaseFast
+          zig-out/bin/zslay-echo-server --self-test
+          zig-out/bin/zslay-echo-server --port 9001 > echo-server.log 2>&1 &
+          echo_pid=$!
+          trap 'kill "$echo_pid" 2>/dev/null || true' EXIT
+          timeout 10 bash -c 'until grep -q "^READY 9001$" echo-server.log; do sleep 0.1; done'
+          python3 scripts/benchmark_echo.py --port 9001 \
+            --case 1:128 --case 1:1024 --case 64:128 --case 64:1024 \
+            --duration 5 --warmup 1 --output echo.json
+
+      - name: Validate and annotate candidate
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          ZIG_VERSION="$(nix develop -c zig version)" \
+            python3 scripts/benchmark_history.py record \
+              --input candidate.json --output record.json \
+              --contract benchmarks/CONTRACT.md
+
+      - name: Validate and annotate echo candidate
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          ZIG_VERSION="$(nix develop -c zig version)" \
+            python3 scripts/benchmark_history.py record-echo \
+              --input echo.json --output echo-record.json \
+              --contract benchmarks/ECHO_CONTRACT.md
+
+      - name: Run base benchmark when available
+        if: github.event_name == 'pull_request'
+        id: baseline
+        run: |
+          if test -f baseline/src/bench.zig && \
+             grep -q 'b.step("bench"' baseline/build.zig && \
+             grep -q 'schema_version' baseline/src/bench.zig; then
+            cd baseline
+            nix develop -c zig build bench -Doptimize=ReleaseFast > ../baseline.json
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compare with PR base
+        if: steps.baseline.outputs.available == 'true'
+        run: |
+          python3 scripts/benchmark_history.py compare \
+            --candidate candidate.json --baseline baseline.json \
+            --output comparison.json
+
+      - name: Run PR base echo benchmark when available
+        if: github.event_name == 'pull_request'
+        id: echo_baseline
+        run: |
+          if test -f baseline/benchmarks/echo_server.c && \
+             test -f baseline/scripts/benchmark_echo.py && \
+             grep -q 'b.step("bench-echo"' baseline/build.zig; then
+            cd baseline
+            nix develop -c zig build bench-echo -Doptimize=ReleaseFast
+            zig-out/bin/zslay-echo-server --self-test
+            zig-out/bin/zslay-echo-server --port 9002 > ../echo-baseline-server.log 2>&1 &
+            echo_pid=$!
+            trap 'kill "$echo_pid" 2>/dev/null || true' EXIT
+            timeout 10 bash -c 'until grep -q "^READY 9002$" ../echo-baseline-server.log; do sleep 0.1; done'
+            python3 scripts/benchmark_echo.py --port 9002 \
+              --case 1:128 --case 1:1024 --case 64:128 --case 64:1024 \
+              --duration 5 --warmup 1 --output ../echo-baseline.json
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compare echo with PR base
+        if: steps.echo_baseline.outputs.available == 'true'
+        run: |
+          python3 scripts/benchmark_history.py compare-echo \
+            --candidate echo.json --baseline echo-baseline.json \
+            --output echo-comparison.json
+
+      - name: Report unavailable PR base echo suite
+        if: github.event_name == 'pull_request' && steps.echo_baseline.outputs.available != 'true'
+        run: |
+          python3 -c 'import json; print(json.dumps({"schema_version": 1, "benchmark": "zslay-echo", "status": "skipped", "reason": "base revision has no compatible echo benchmark"}, indent=2))' > echo-comparison.json
+
+      - name: Report unavailable PR base
+        if: github.event_name == 'pull_request' && steps.baseline.outputs.available != 'true'
+        run: |
+          python3 -c 'import json; print(json.dumps({"schema_version": 1, "benchmark": "zslay-core", "status": "skipped", "reason": "base revision has no compatible JSON benchmark"}, indent=2))' > comparison.json
+
+      - name: Upload benchmark evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: benchmark-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            candidate.json
+            echo.json
+            echo-record.json
+            echo-server.log
+            echo-baseline.json
+            echo-baseline-server.log
+            echo-comparison.json
+            baseline.json
+            comparison.json
+            record.json
+          if-no-files-found: error
+
+  publish:
+    name: Publish history
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: measure
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Checkout history workspace
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: history
+
+      - name: Download benchmark evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: benchmark-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence
+
+      - name: Switch to history branch
+        working-directory: history
+        run: |
+          if git fetch origin benchmark-data; then
+            git switch --detach FETCH_HEAD
+            git switch -c benchmark-data
+          else
+            git switch --orphan benchmark-data
+            git rm -rf .
+          fi
+
+      - name: Add immutable record and update pointers
+        run: |
+          python3 scripts/benchmark_history.py publish \
+            --record evidence/record.json --history history \
+            --contract benchmarks/CONTRACT.md
+          python3 scripts/benchmark_history.py publish-echo \
+            --record evidence/echo-record.json --history history \
+            --contract benchmarks/ECHO_CONTRACT.md
+
+      - name: Push history
+        working-directory: history
+        run: |
+          git add records contracts index.json latest.json echo
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m "ci(benchmark): record run ${{ github.run_id }}"
+          git push origin HEAD:benchmark-data
