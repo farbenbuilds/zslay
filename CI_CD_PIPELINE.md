@@ -42,6 +42,8 @@ On pull requests into `main` that change benchmark-relevant paths, the read-only
 
 Nightly and manually dispatched runs on `main` publish validated records through a separate bot job with `contents: write` permission. The target is the `benchmark-data` branch. Core records live at `records/YYYY/<run-id>-<attempt>-<sha12>.json`, with `contracts/`, `latest.json`, and `index.json` in the branch root. Echo records use the same layout under `echo/`, including a snapshot of `ECHO_CONTRACT.md` in `echo/contracts/`. Records include samples, contract checksum, source SHA, run details, runner CPU/image/kernel, Zig version, flake-lock hash, and optimization mode. A record ID is immutable: re-publishing identical content succeeds, while conflicting content fails.
 
+The bot also generates the branch-root [results README](https://github.com/farbenbuilds/zslay/tree/benchmark-data). It displays the latest core and echo results and recent runs, with links to the complete JSON records and workload contracts. The README is a summary; the JSON records remain the durable data source.
+
 GitHub-hosted runner hardware and scheduling vary, so compare results within matching case and environment cohorts. Echo results include local socket, server-adapter, and client costs; they do not assert absolute server capacity or rank other frameworks. The contracts document local reproduction and result units.
 
 ## Release Pipeline (`publish.yml`)

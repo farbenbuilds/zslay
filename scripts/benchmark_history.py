@@ -290,6 +290,74 @@ def publish_echo(args):
     publish(args, load_echo_record, "echo")
 
 
+def render_readme(args):
+    root = pathlib.Path(args.history)
+    core = load_result(root / "latest.json")
+    echo = load_echo_record(root / "echo/latest.json")
+    core_index = json.loads((root / "index.json").read_text())["records"]
+    echo_index = json.loads((root / "echo/index.json").read_text())["records"]
+    repository = core["github"]["repository"]
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+        raise ValueError("invalid GitHub repository in latest core record")
+    github = f"https://github.com/{repository}"
+
+    def provenance(record, contract_prefix):
+        run = record["github"]
+        return (f"[{record['recorded_at']}]({github}/actions/runs/{run['run_id']}) from "
+                f"[`{record['source_sha'][:12]}`]({github}/commit/{record['source_sha']}); "
+                f"[workload contract]({contract_prefix}/contracts/{record['contract_sha256']}.md)")
+
+    lines = [
+        "# zslay benchmark results", "",
+        "Results from the scheduled and manual benchmark workflow on `main`. "
+        "Each table shows the latest published run for its suite. "
+        "GitHub-hosted runner hardware and load vary, so compare runs with their workload and environment metadata.",
+        "", "## Core framing operations", "",
+        f"Latest: {provenance(core, '.')}", "",
+        "| Case | Bytes per operation | ns/op | ops/s |", "| --- | ---: | ---: | ---: |",
+    ]
+    for case in core["cases"]:
+        lines.append(f"| `{case['name']}` | {case['bytes_per_op']:,} | "
+                     f"{case['ns_per_op']:,.2f} | {case['ops_per_sec']:,.0f} |")
+    lines += [
+        "", "Core operations run in process; they do not include socket I/O.",
+        "", "## WebSocket echo round trips", "",
+        f"Latest: {provenance(echo, 'echo')}", "",
+        "| Connections | Payload (bytes) | round trips/s | p50 RTT (us) | p95 RTT (us) | p99 RTT (us) |",
+        "| ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for case in sorted(echo["cases"], key=lambda item: (item["connections"], item["payload_bytes"])):
+        rtt = case["rtt_ns"]
+        lines.append(f"| {case['connections']} | {case['payload_bytes']:,} | {case['ops_per_sec']:,.0f} | "
+                     f"{rtt['p50'] / 1000:,.2f} | {rtt['p95'] / 1000:,.2f} | {rtt['p99'] / 1000:,.2f} |")
+    lines += [
+        "", "Each echo operation is one validated masked request and unmasked response over loopback TCP.",
+        "Core ops/s and echo round trips/s measure different work and are not directly comparable.",
+        "", "## Recent runs", "",
+        "| Recorded (UTC) | Source | Core record | Echo record |",
+        "| --- | --- | --- | --- |",
+    ]
+    recent = {}
+    for namespace, entries in (("core", core_index), ("echo", echo_index)):
+        for entry in entries:
+            item = recent.setdefault(entry["record_id"], {"recorded_at": entry["recorded_at"],
+                                                        "source_sha": entry["source_sha"]})
+            item[namespace] = entry["record_path"]
+    for record_id, entry in sorted(recent.items(), key=lambda pair: (pair[1]["recorded_at"], pair[0]),
+                                   reverse=True)[:5]:
+        source = entry["source_sha"]
+        core_link = f"[JSON]({entry['core']})" if "core" in entry else "—"
+        echo_link = f"[JSON](echo/{entry['echo']})" if "echo" in entry else "—"
+        lines.append(f"| {entry['recorded_at']} | [`{source[:12]}`]({github}/commit/{source}) | "
+                     f"{core_link} | {echo_link} |")
+    lines += [
+        "", "[Latest core JSON](latest.json) · [Latest echo JSON](echo/latest.json) · "
+        "[Complete core history](index.json) · [Complete echo history](echo/index.json) · "
+        f"[Benchmark workflow]({github}/actions/workflows/benchmark.yml)", "",
+    ]
+    (root / "README.md").write_text("\n".join(lines))
+
+
 def main():
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
@@ -323,6 +391,9 @@ def main():
     echo_history.add_argument("--history", required=True)
     echo_history.add_argument("--contract", required=True)
     echo_history.set_defaults(func=publish_echo)
+    readme = commands.add_parser("render-readme")
+    readme.add_argument("--history", required=True)
+    readme.set_defaults(func=render_readme)
     args = parser.parse_args()
     try:
         args.func(args)
