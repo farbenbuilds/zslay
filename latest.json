@@ -4,110 +4,110 @@
     {
       "bytes_per_op": 8,
       "name": "header_encode_masked",
-      "ns_per_op": 0.673,
-      "ops_per_sec": 1485199982.178,
+      "ns_per_op": 0.677,
+      "ops_per_sec": 1477279442.179,
       "sample_durations_ns": [
-        67390,
-        67331,
-        67301,
-        81792,
-        67340,
-        67311,
-        67331
+        67712,
+        67602,
+        67692,
+        67803,
+        67632,
+        67632,
+        67903
       ],
       "samples_ns_per_op": [
-        0.674,
-        0.673,
-        0.673,
-        0.818,
-        0.673,
-        0.673,
-        0.673
+        0.677,
+        0.676,
+        0.677,
+        0.678,
+        0.676,
+        0.676,
+        0.679
       ]
     },
     {
       "bytes_per_op": 8,
       "name": "header_decode_masked",
-      "ns_per_op": 0.882,
-      "ops_per_sec": 1133761139.203,
+      "ns_per_op": 0.888,
+      "ops_per_sec": 1126455944.308,
       "sample_durations_ns": [
-        88192,
-        88211,
-        88192,
-        88232,
-        88202,
-        88202,
-        88201
+        88764,
+        88664,
+        88764,
+        90187,
+        99350,
+        88774,
+        88775
       ],
       "samples_ns_per_op": [
-        0.882,
-        0.882,
-        0.882,
-        0.882,
-        0.882,
-        0.882,
-        0.882
+        0.888,
+        0.887,
+        0.888,
+        0.902,
+        0.994,
+        0.888,
+        0.888
       ]
     },
     {
       "bytes_per_op": 1024,
       "name": "payload_mask_1024b",
-      "ns_per_op": 14.856,
-      "ops_per_sec": 67312009.338,
+      "ns_per_op": 14.887,
+      "ops_per_sec": 67171257.15,
       "sample_durations_ns": [
-        1480291,
-        1513100,
-        1497187,
-        1478308,
-        1481614,
-        1485759,
-        1485619
+        1486880,
+        1521181,
+        1497455,
+        1488732,
+        1485567,
+        1489323,
+        1483774
       ],
       "samples_ns_per_op": [
-        14.803,
-        15.131,
-        14.972,
-        14.783,
-        14.816,
-        14.858,
-        14.856
+        14.869,
+        15.212,
+        14.975,
+        14.887,
+        14.856,
+        14.893,
+        14.838
       ]
     },
     {
       "bytes_per_op": 136,
       "name": "conn_rx_state_128b",
-      "ns_per_op": 8.043,
-      "ops_per_sec": 124329862.044,
+      "ns_per_op": 8.351,
+      "ops_per_sec": 119751443.903,
       "sample_durations_ns": [
-        800105,
-        807456,
-        795599,
-        865443,
-        818622,
-        804312,
-        804241
+        973422,
+        895755,
+        825609,
+        819750,
+        835063,
+        855864,
+        801793
       ],
       "samples_ns_per_op": [
-        8.001,
-        8.075,
-        7.956,
-        8.654,
-        8.186,
-        8.043,
-        8.042
+        9.734,
+        8.958,
+        8.256,
+        8.198,
+        8.351,
+        8.559,
+        8.018
       ]
     }
   ],
-  "contract_sha256": "20960835f1a7788ab7a1558a69e92cac523142ca6100a1d17db30a2aa46bba2f",
+  "contract_sha256": "0654a1fc00a723f950b001981660993485abcd727d18efdc85e39cb68604ccbc",
   "github": {
-    "event": "workflow_dispatch",
+    "event": "schedule",
     "repository": "farbenbuilds/zslay",
     "run_attempt": "1",
-    "run_id": "38105320444"
+    "run_id": "38130273506"
   },
   "iterations_per_sample": 100000,
-  "record_id": "38105320444-1-bb2a0c7abc01",
-  "recorded_at": "2026-10-11T02:31:25Z",
+  "record_id": "38130273506-1-2af3b092c186",
+  "recorded_at": "2026-10-11T10:00:24Z",
   "repetitions": 7,
   "runner": {
     "cpu": "AMD EPYC 9V45 96-Core Processor",
@@ -116,7 +116,7 @@
     "machine": "x86_64"
   },
   "schema_version": 1,
-  "source_sha": "bb2a0c7abc01274578af60a9e5b0f5c344d4754a",
+  "source_sha": "2af3b092c18655fc206b95689b859cea376b3de6",
   "toolchain": {
     "flake_lock_sha256": "62f28d3306eceb81cece05ce73c89bc4f99d8cec4d20e9458f254a58a767a5b4",
     "optimize": "ReleaseFast",
