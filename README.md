@@ -4,27 +4,27 @@ Results from the scheduled and manual benchmark workflow on `main`. Each table s
 
 ## Core framing operations
 
-Latest: [2026-10-12T10:48:01Z](https://github.com/farbenbuilds/zslay/actions/runs/38238387655) from [`2af3b092c186`](https://github.com/farbenbuilds/zslay/commit/2af3b092c18655fc206b95689b859cea376b3de6); [workload contract](./contracts/0654a1fc00a723f950b001981660993485abcd727d18efdc85e39cb68604ccbc.md)
+Latest: [2026-10-13T10:44:47Z](https://github.com/farbenbuilds/zslay/actions/runs/38384101655) from [`2af3b092c186`](https://github.com/farbenbuilds/zslay/commit/2af3b092c18655fc206b95689b859cea376b3de6); [workload contract](./contracts/0654a1fc00a723f950b001981660993485abcd727d18efdc85e39cb68604ccbc.md)
 
 | Case | Bytes per operation | ns/op | ops/s |
 | --- | ---: | ---: | ---: |
-| `header_encode_masked` | 8 | 0.70 | 1,427,225,759 |
-| `header_decode_masked` | 8 | 0.92 | 1,090,536,326 |
-| `payload_mask_1024b` | 1,024 | 15.48 | 64,577,248 |
-| `conn_rx_state_128b` | 136 | 8.39 | 119,125,476 |
+| `header_encode_masked` | 8 | 1.61 | 621,844,141 |
+| `header_decode_masked` | 8 | 1.67 | 598,633,917 |
+| `payload_mask_1024b` | 1,024 | 26.30 | 38,027,238 |
+| `conn_rx_state_128b` | 136 | 13.60 | 73,549,259 |
 
 Core operations run in process; they do not include socket I/O.
 
 ## WebSocket echo round trips
 
-Latest: [2026-10-12T10:48:01Z](https://github.com/farbenbuilds/zslay/actions/runs/38238387655) from [`2af3b092c186`](https://github.com/farbenbuilds/zslay/commit/2af3b092c18655fc206b95689b859cea376b3de6); [workload contract](echo/contracts/0d9d35373fdc3a4a064ed27b72538ac2b3c4c90b3bfefc3a3015991821d0326e.md)
+Latest: [2026-10-13T10:44:47Z](https://github.com/farbenbuilds/zslay/actions/runs/38384101655) from [`2af3b092c186`](https://github.com/farbenbuilds/zslay/commit/2af3b092c18655fc206b95689b859cea376b3de6); [workload contract](echo/contracts/0d9d35373fdc3a4a064ed27b72538ac2b3c4c90b3bfefc3a3015991821d0326e.md)
 
 | Connections | Payload (bytes) | round trips/s | p50 RTT (us) | p95 RTT (us) | p99 RTT (us) |
 | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 | 128 | 17,271 | 54.63 | 65.58 | 75.02 |
-| 1 | 1,024 | 11,006 | 86.98 | 98.29 | 121.63 |
-| 64 | 128 | 28,586 | 2,172.38 | 2,242.26 | 2,256.92 |
-| 64 | 1,024 | 14,011 | 4,459.63 | 4,695.57 | 4,742.23 |
+| 1 | 128 | 11,608 | 83.25 | 103.55 | 133.18 |
+| 1 | 1,024 | 7,168 | 135.29 | 158.55 | 177.84 |
+| 64 | 128 | 20,934 | 3,109.62 | 3,257.75 | 3,380.18 |
+| 64 | 1,024 | 8,952 | 7,017.38 | 8,729.96 | 8,968.08 |
 
 Each echo operation is one validated masked request and unmasked response over loopback TCP.
 Core ops/s and echo round trips/s measure different work and are not directly comparable.
@@ -33,6 +33,7 @@ Core ops/s and echo round trips/s measure different work and are not directly co
 
 | Recorded (UTC) | Source | Core record | Echo record |
 | --- | --- | --- | --- |
+| 2026-10-13T10:44:47Z | [`2af3b092c186`](https://github.com/farbenbuilds/zslay/commit/2af3b092c18655fc206b95689b859cea376b3de6) | [JSON](records/2026/38384101655-1-2af3b092c186.json) | [JSON](echo/records/2026/38384101655-1-2af3b092c186.json) |
 | 2026-10-12T10:48:01Z | [`2af3b092c186`](https://github.com/farbenbuilds/zslay/commit/2af3b092c18655fc206b95689b859cea376b3de6) | [JSON](records/2026/38238387655-1-2af3b092c186.json) | [JSON](echo/records/2026/38238387655-1-2af3b092c186.json) |
 | 2026-10-11T10:00:24Z | [`2af3b092c186`](https://github.com/farbenbuilds/zslay/commit/2af3b092c18655fc206b95689b859cea376b3de6) | [JSON](records/2026/38130273506-1-2af3b092c186.json) | [JSON](echo/records/2026/38130273506-1-2af3b092c186.json) |
 | 2026-10-11T02:31:25Z | [`bb2a0c7abc01`](https://github.com/farbenbuilds/zslay/commit/bb2a0c7abc01274578af60a9e5b0f5c344d4754a) | [JSON](records/2026/38105320444-1-bb2a0c7abc01.json) | [JSON](echo/records/2026/38105320444-1-bb2a0c7abc01.json) |
