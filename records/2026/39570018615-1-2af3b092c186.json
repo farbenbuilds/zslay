@@ -1,0 +1,126 @@
+{
+  "benchmark": "zslay-core",
+  "cases": [
+    {
+      "bytes_per_op": 8,
+      "name": "header_encode_masked",
+      "ns_per_op": 0.687,
+      "ops_per_sec": 1454926380.725,
+      "sample_durations_ns": [
+        68823,
+        68733,
+        68732,
+        68743,
+        68692,
+        68683,
+        68712
+      ],
+      "samples_ns_per_op": [
+        0.688,
+        0.687,
+        0.687,
+        0.687,
+        0.687,
+        0.687,
+        0.687
+      ]
+    },
+    {
+      "bytes_per_op": 8,
+      "name": "header_decode_masked",
+      "ns_per_op": 0.903,
+      "ops_per_sec": 1107738662.295,
+      "sample_durations_ns": [
+        90054,
+        101031,
+        154931,
+        92748,
+        90084,
+        90115,
+        90274
+      ],
+      "samples_ns_per_op": [
+        0.901,
+        1.01,
+        1.549,
+        0.927,
+        0.901,
+        0.901,
+        0.903
+      ]
+    },
+    {
+      "bytes_per_op": 1024,
+      "name": "payload_mask_1024b",
+      "ns_per_op": 15.534,
+      "ops_per_sec": 64373800.636,
+      "sample_durations_ns": [
+        1570902,
+        1528179,
+        1569290,
+        1543451,
+        1559846,
+        1553427,
+        1543000
+      ],
+      "samples_ns_per_op": [
+        15.709,
+        15.282,
+        15.693,
+        15.435,
+        15.598,
+        15.534,
+        15.43
+      ]
+    },
+    {
+      "bytes_per_op": 136,
+      "name": "conn_rx_state_128b",
+      "ns_per_op": 8.412,
+      "ops_per_sec": 118877087.036,
+      "sample_durations_ns": [
+        839111,
+        840132,
+        841205,
+        849647,
+        837138,
+        1012369,
+        851129
+      ],
+      "samples_ns_per_op": [
+        8.391,
+        8.401,
+        8.412,
+        8.496,
+        8.371,
+        10.124,
+        8.511
+      ]
+    }
+  ],
+  "contract_sha256": "0654a1fc00a723f950b001981660993485abcd727d18efdc85e39cb68604ccbc",
+  "github": {
+    "event": "schedule",
+    "repository": "farbenbuilds/zslay",
+    "run_attempt": "1",
+    "run_id": "39570018615"
+  },
+  "iterations_per_sample": 100000,
+  "record_id": "39570018615-1-2af3b092c186",
+  "recorded_at": "2026-10-21T08:34:07Z",
+  "repetitions": 7,
+  "runner": {
+    "cpu": "AMD EPYC 9V45 96-Core Processor",
+    "image": "ubuntu24",
+    "kernel": "6.17.0-1022-azure",
+    "machine": "x86_64"
+  },
+  "schema_version": 1,
+  "source_sha": "2af3b092c18655fc206b95689b859cea376b3de6",
+  "toolchain": {
+    "flake_lock_sha256": "62f28d3306eceb81cece05ce73c89bc4f99d8cec4d20e9458f254a58a767a5b4",
+    "optimize": "ReleaseFast",
+    "zig": "0.16.0"
+  },
+  "warmup_operations": 10000
+}
