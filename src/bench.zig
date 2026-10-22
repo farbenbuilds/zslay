@@ -74,7 +74,7 @@ fn receive_state(ctx: *RxContext) !void {
     if (try conn.advance_rx() != .need_payload) return error.BenchmarkMismatch;
     try conn.advance_payload_read(PayloadLen);
     if (try conn.advance_rx() != .emit_frame) return error.BenchmarkMismatch;
-    conn.complete_frame();
+    try conn.complete_frame();
     std.mem.doNotOptimizeAway(conn);
 }
 
@@ -115,7 +115,7 @@ fn print_result(out: *std.Io.Writer, result: Result, last: bool) !void {
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const header: root.FrameHeader = .{
-        .opcode = @intFromEnum(root.Opcode.binary),
+        .opcode = @backingInt(root.Opcode.binary),
         .rsv3 = false,
         .rsv2 = false,
         .rsv1 = false,
@@ -134,7 +134,7 @@ pub fn main(init: std.process.Init) !void {
     const decoded = try root.decode_header(header_ctx.encoded[0..header_ctx.encoded_len]);
     if (decoded.payload_len != PayloadLen or decoded.masking_key == null) return error.BenchmarkMismatch;
 
-    var mask_ctx = MaskContext{ .buffer = [_]u8{0x5a} ** MaskBufferLen };
+    var mask_ctx = MaskContext{ .buffer = @splat(0x5a) };
     try mask_payload(&mask_ctx);
     try mask_payload(&mask_ctx);
     for (mask_ctx.buffer) |byte| {

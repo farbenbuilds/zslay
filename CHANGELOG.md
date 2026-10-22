@@ -4,6 +4,61 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-10-22
+
+### Added
+
+- `zslay_conn_tx_pending` reports whether borrowed transmit payloads are still live; `zslay_conn_reset_tx` clears queued frames and open fragments; `zslay_conn_deinit` retires caller-owned handles.
+- `zslay_abi_version` and an opaque-handle magic/version check reject stale, uninitialized, and wrong-object C handles.
+- `zslay_validate_close_payload` exposes close-code and UTF-8 reason validation to C consumers.
+- `Conn.get_tx_payload`, `Conn.get_tx_payload_offset`, `Conn.get_tx_masking_key`, and `Conn.advance_tx_payload` provide a checked transmit-payload API instead of direct queue access.
+- `Conn.is_at_frame_boundary`, `Conn.tx_pending`, `Conn.reset_tx`, `frame.header_bytes_needed`, and `frame.is_valid_close_code`.
+- C receive staging uses a 14-byte per-connection stage to coalesce the header and payload prefix, reducing transport reads without adding another large per-connection buffer.
+- Ping and pong frames preempt an unsent queue head, so control latency does not wait behind queued data frames.
+- `test-release-safe` coverage is part of `zig build test`; the release safety model is exercised on every run.
+- `.gitattributes` marks vendored agent tooling as non-source so GitHub reports Zig as the primary language.
+
+### Fixed
+
+- `encode_header` now derives the wire marker from `payload_len` and rejects marker/payload mismatches. This closes the short-marker truncation and control-frame limit bypass.
+- `encode_header` rejects a masking key supplied for an unmasked header instead of silently dropping it.
+- Masking uses a word width that is always a multiple of four bytes, fixing corruption on 16-bit targets and removing a theoretical loop-bound overflow.
+- `validate_close_payload` rejects payloads over 125 bytes, and `decode_header` rejects one-byte close payloads.
+- `Conn.complete_frame` returns `error.ProtocolError` for a partially consumed payload; callers must use `reset_rx` to abandon a frame deliberately.
+- Zero-byte header, payload, and transmit advances return `error.InvalidLength` instead of allowing a livelock.
+- Outbound close frames are validated by `Conn.prepare_frame` before serialization.
+- Outgoing nodes with a null payload pointer and a nonzero length are rejected.
+- The C adapter detects callback reentrancy and returns `ZSLAY_ERR_REENTRANT`; `on_frame` may still enqueue a response.
+- `zslay_conn_init` rejects client connections without a mask generator, overlapping connection/transmit storage, oversized transmit counts, and invalid alignment.
+- C `send` caps callbacks, total bytes, masked chunks, and unmasked chunks per call, so a fast peer or one-byte writes cannot monopolize the event loop.
+- C `prepare_frame` and `queue_frame` reject node storage that overlaps the connection, an active queued slot, or the receive chunk, and reject payload storage that overlaps zslay-owned memory or the node.
+- `on_frame` receive chunks are rejected as queued payloads, preventing a transient stack pointer from becoming a borrowed transmit payload.
+- `zslay_conn_init` uses a thread-local callback-depth guard instead of reading possibly uninitialized handle memory and rejects reinitialization from any callback.
+
+### Changed
+
+- Require Zig `0.17.0`; migrate to `@backingInt`/`@fromBackingInt`, `@splat`, and the current test/build APIs.
+- Bump the package version to `0.3.0`.
+- `get_serialized_size` returns `error.InvalidLength` for payloads above `MaxPayloadLen` instead of a plausible but unencodable size.
+- The C connection context now includes a 4 KiB masked transmit scratch chunk; allocate it from `zslay_conn_get_size` and recompile fixed-size consumers.
+- `zslay_conn_send` returns `ZSLAY_PROGRESS` when its callback budget expires and `ZSLAY_OK` when the queue drains or the transport would block.
+- C `prepare_frame` and `queue_frame` now return `ZSLAY_ERR_INVALID_ARGUMENT` for local frame-direction, opcode, and limit errors, `ZSLAY_ERR_INVALID_UTF8` for a bad close reason, and `ZSLAY_ERR_PROTOCOL` for invalid protocol state; the mapping is documented in `include/zslay.h`.
+- Queue wrap uses branch-based index updates, and `Queue.clear`/`Queue.front` replace direct field access in hot paths.
+- The echo benchmark reads handshakes in chunks, keeps bytes that arrive after the HTTP headers, uses a poll timeout with a 30-second idle limit, caps accepts per iteration, and uses separate node and transmit storage.
+
+### Performance
+
+- Cached masked transmit chunks avoid re-copying and re-masking up to 4 KiB after every partial send or would-block.
+- Header encode and decode benchmarks improved from about 1.25 ns/op to 0.63 ns/op and 1.63 ns/op to 0.83 ns/op respectively on the reference runner.
+- Masking remains word-at-a-time within a fixed 4 KiB callback chunk.
+
+### Security
+
+- Validate close frame length, status code, and UTF-8 reason on the outbound path and expose the validator to C.
+- Reject stale or forged C handles, overlapping storage, and reentrant state-machine calls.
+- Bound C send work per invocation and cap unmasked transport chunks.
+- Bound echo-server handshake reads, accepts, and idle connection lifetime.
+
 ## [0.2.1] - 2026-09-24
 
 ### Fixed

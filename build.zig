@@ -46,7 +46,7 @@ pub fn build(b: *std.Build) void {
     });
     c_smoke.root_module.addCSourceFile(.{
         .file = b.path("src/c_api_smoke.c"),
-        .flags = &.{ "-std=c11", "-Wall", "-Wextra" },
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Werror" },
     });
     c_smoke.root_module.addIncludePath(b.path("include"));
     c_smoke.root_module.linkLibrary(lib);
@@ -77,7 +77,7 @@ pub fn build(b: *std.Build) void {
     });
     echo_server.root_module.addCSourceFile(.{
         .file = b.path("benchmarks/echo_server.c"),
-        .flags = &.{ "-std=c11", "-Wall", "-Wextra" },
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Werror" },
     });
     echo_server.root_module.addIncludePath(b.path("include"));
     echo_server.root_module.linkLibrary(lib);
@@ -95,13 +95,25 @@ pub fn build(b: *std.Build) void {
 
     const run_lib_tests = b.addRunArtifact(lib_tests);
 
+    // exercise the same suite with the release safety model used by distributed artifacts
+    const lib_tests_safe = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/test.zig"),
+            .target = target,
+            .optimize = .safe,
+        }),
+    });
+    const run_lib_tests_safe = b.addRunArtifact(lib_tests_safe);
+
     const test_step = b.step("test", "Run unit tests for zslay");
     test_step.dependOn(&run_lib_tests.step);
+    test_step.dependOn(&run_lib_tests_safe.step);
     test_step.dependOn(&run_c_smoke.step);
 
     const check_step = b.step("check", "Run semantic linter");
     check_step.dependOn(&lib.step);
     check_step.dependOn(&lib_tests.step);
+    check_step.dependOn(&lib_tests_safe.step);
     check_step.dependOn(&c_smoke.step);
     check_step.dependOn(&bench.step);
 }

@@ -18,7 +18,7 @@ Core code must remain zero-allocation and I/O-agnostic. Use caller-provided buff
 
 Shared project skills live in `.agents/skills/` and are locked by `skills-lock.json`. Platform copies from the graphify installer live in `.opencode/skills/graphify/` and `.codex/skills/graphify/` and are version-stamped by `.graphify_version`. `SKILL.md` is the human-readable catalog; `AGENT_DIRECTORY.md` is the source of truth for agent-to-skill coverage.
 
-- Zig work uses `zig-0-17`, `zig-best-practices`, and `zig-testing`. The repository still pins Zig 0.16.0 in `flake.nix` and `build.zig.zon`; treat `zig-0-17` as migration guidance until that pin changes.
+- Zig work uses `zig-0-17`, `zig-best-practices`, and `zig-testing`. The repository pins Zig 0.17.0 in `flake.nix` and `build.zig.zon`; apply the 0.17 guidance directly.
 - Architecture and design work uses `improve-codebase-architecture`, `codebase-design`, `grilling`, `grill-me`, and `domain-modeling`. The architect is read-only; route report and glossary/ADR writes to the developer or `zslay-docs`.
 - Review work uses `thermo-nuclear-code-quality-review` for strict maintainability findings in addition to the repository review checklist.
 - JavaScript and TypeScript tooling under Node bindings uses `install-anti-slop` once `bindings/node/` and an Oxlint configuration exist; the skill is staged until then.
@@ -26,7 +26,7 @@ Shared project skills live in `.agents/skills/` and are locked by `skills-lock.j
 
 ## Build, Test, and Development Commands
 
-Enter the pinned Zig 0.16.0 environment before development:
+Enter the pinned Zig 0.17.0 environment before development:
 
 ```bash
 nix develop                 # open the reproducible development shell

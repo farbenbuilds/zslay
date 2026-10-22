@@ -1,6 +1,6 @@
 # Codebase Map
 
-`zslay` is a zero-allocation, I/O-agnostic WebSocket framing library written in Zig 0.16.0. Callers own buffers and network I/O; the library parses, serializes, masks, and tracks frame state.
+`zslay` is a zero-allocation, I/O-agnostic WebSocket framing library written in Zig 0.17.0. Callers own buffers and network I/O; the library parses, serializes, masks, and tracks frame state.
 
 ## Runtime Flow
 
@@ -19,26 +19,27 @@ Types are plain, top-level declarations with explicit names. Repeated or inline 
 | File | Purpose |
 | --- | --- |
 | `src/types.zig` | Defines RFC 6455 opcodes, close codes, parser errors, packed frame headers, and the named size aliases `MaskingKeyLen`, `MaskingKey`, `MaxFrameHeaderLen`, and `FrameHeaderBuffer`. |
-| `src/frame.zig` | Pure functions that encode and decode frame headers, resolve canonical lengths into `DecodedHeader`, calculate serialized sizes, mask payloads in place, and validate close payloads. |
+| `src/frame.zig` | Pure functions that encode and decode frame headers, resolve canonical lengths into `DecodedHeader`, calculate serialized sizes, derive header byte counts, mask payloads in place, and validate close payloads. |
 | `src/queue.zig` | Implements a generic bounded deque `Queue(Element)` over caller-provided storage; it performs no allocation. |
-| `src/event.zig` | Holds the iterative receive/transmit state machine, `ConnConfig`, `FrameNode`, `FragmentState`, and the concrete `FrameQueue` alias for the TX ring buffer. |
-| `src/c_api.zig` | Exports the role-aware, bounded C ABI and bridges the `Callbacks` struct and caller-owned `ZslayConn` storage to the Zig state machine. |
+| `src/event.zig` | Holds the iterative receive/transmit state machine, `ConnConfig`, `FrameNode`, `FragmentState`, the concrete `FrameQueue` alias, checked TX header/payload accessors, and ping/pong preemption for an unsent queue head. |
+| `src/c_api.zig` | Exports the role-aware, bounded C ABI, validates opaque handles, guards callback reentrancy, stages receive headers, enforces callback/byte send budgets and payload-overlap rules, and bridges caller-owned storage to the Zig state machine. |
 | `src/root.zig` | Defines the public Zig module and re-exports the supported API. |
-| `src/test.zig` | Tests layouts, queues, frame encoding/decoding, masking, and malformed-input resilience. |
+| `src/test.zig` | Tests layouts, queues, frame encoding/decoding, masking, TX accessors, malformed-input resilience, C ABI handles, partial sends, and reentrancy. |
 | `src/bench.zig` | Standalone, in-process benchmark for header operations, payload masking, and receive state transitions; prints JSON via `zig build bench -Doptimize=ReleaseFast` and is excluded from the unit test suite. |
-| `benchmarks/echo_server.c` | Loopback WebSocket echo adapter that drives the public C ABI from socket callbacks; built by `zig build bench-echo`. |
+| `benchmarks/echo_server.c` | Loopback WebSocket echo adapter with chunked handshakes, pipelined-input draining, an 8 KiB receive buffer, idle retirement, and separate node/transmit storage; built by `zig build bench-echo`. |
 | `src/c_api_smoke.c` | C11 ABI smoke test compiled and linked against the installed `zslay.h` and static library; executed by `zig build test`. |
 
 ## Build and Environment
 
 | File | Purpose |
 | --- | --- |
-| `build.zig` | Builds the Zig module and static C library; defines `test`, `bench`, `bench-echo`, and `check` steps. The `test` step also compiles, links, and runs the C ABI smoke test. |
+| `build.zig` | Builds the Zig module and static C library; defines `test`, `bench`, `bench-echo`, and `check` steps. The `test` step runs Debug and ReleaseSafe suites and compiles, links, and runs the C ABI smoke test. |
 | `build.zig.zon` | Stores package metadata, the minimum Zig version, and published paths. |
-| `include/zslay.h` | Declares the installed C ABI, callback contracts, result codes, storage alignment, and borrowed-memory lifetimes. |
+| `include/zslay.h` | Declares the installed C ABI, ABI revision, callback/reentrancy contracts, result codes, storage alignment, and borrowed-memory lifetimes. |
 | `flake.nix`, `flake.lock` | Pin the Nix development shell, checks, formatter, and cross-platform release builds. |
 | `.envrc` | Loads the Nix flake through direnv. |
 | `.pre-commit-config.yaml` | Configures local formatting and validation hooks. |
+| `.gitattributes` | Excludes vendored agent tooling from GitHub language statistics and marks Zig package metadata. |
 
 ## Project Support Files
 

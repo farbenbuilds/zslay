@@ -39,35 +39,54 @@ fn read_length(buf: []const u8, payload_len: u7) types.Error!DecodedLength {
     return .{ .payload_len = payload_len, .header_len = 2 };
 }
 
+// Pure: derives the number of header bytes from the second base header byte
+pub fn header_bytes_needed(base_len_byte: u8) usize {
+    const len_marker = base_len_byte & 0x7f;
+
+    var needed: usize = 2;
+    if (len_marker == 126) {
+        needed += 2;
+    } else if (len_marker == 127) {
+        needed += 8;
+    }
+
+    if ((base_len_byte & 0x80) != 0) needed += types.MaskingKeyLen;
+
+    return needed;
+}
+
 // Pure: performs in-place WebSocket XOR masking with wide-integer chunks
 pub fn mask(buf: []u8, masking_key: types.MaskingKey, pos: u64) void {
     if (buf.len == 0) return;
 
-    const key_pos: usize = @intCast(pos % masking_key.len);
+    const key_pos: usize = @intCast(pos % @as(u64, types.MaskingKeyLen));
     var key: types.MaskingKey = undefined;
     for (0..types.MaskingKeyLen) |i| key[i] = masking_key[(key_pos + i) % types.MaskingKeyLen];
 
-    const word_size = @sizeOf(usize);
+    // The wide word must be a multiple of the four-byte masking key
+    const Word = if (@bitSizeOf(usize) >= 64) u64 else u32;
+    const word_size = @sizeOf(Word);
     var i: usize = 0;
 
     if (buf.len >= word_size) {
         var wide_key_buf: [word_size]u8 = undefined;
-        for (&wide_key_buf, 0..) |*b, j| b.* = key[j % types.MaskingKeyLen];
+        for (&wide_key_buf, 0..) |*byte, j| byte.* = key[j % types.MaskingKeyLen];
+        const wide_key = std.mem.readInt(Word, &wide_key_buf, .native);
 
-        const wide_key: usize = std.mem.readInt(usize, &wide_key_buf, .native);
-
-        while (i + word_size <= buf.len) : (i += word_size) {
+        while (buf.len - i >= word_size) : (i += word_size) {
             const chunk = buf[i .. i + word_size];
-            const val: usize = std.mem.readInt(usize, chunk[0..word_size], .native);
-            std.mem.writeInt(usize, chunk[0..word_size], val ^ wide_key, .native);
+            const val = std.mem.readInt(Word, chunk[0..word_size], .native);
+            std.mem.writeInt(Word, chunk[0..word_size], val ^ wide_key, .native);
         }
     }
 
     while (i < buf.len) : (i += 1) buf[i] ^= key[i % types.MaskingKeyLen];
 }
 
-// Computes physical header byte length
-pub fn get_serialized_size(payload_len: u64, is_masked: bool) usize {
+// Pure: computes the physical header byte count or rejects an unencodable length
+pub fn get_serialized_size(payload_len: u64, is_masked: bool) types.Error!usize {
+    if (payload_len > types.MaxPayloadLen) return error.InvalidLength;
+
     var size: usize = 2;
 
     if (payload_len >= 126 and payload_len <= 65535) {
@@ -88,31 +107,32 @@ pub fn encode_header(
     payload_len: u64,
     masking_key: ?types.MaskingKey,
 ) types.Error!usize {
-    const op: types.Opcode = @enumFromInt(header.opcode);
+    const op: types.Opcode = @fromBackingInt(header.opcode);
     switch (op) {
         .continuation, .text, .binary, .close, .ping, .pong => {},
         _ => return error.InvalidOpcode,
     }
 
     if (header.rsv1 or header.rsv2 or header.rsv3) return error.ProtocolError;
+    if (payload_len > types.MaxPayloadLen) return error.InvalidLength;
 
-    const extended_size: usize = switch (header.payload_len) {
-        126 => blk: {
-            if (payload_len < 126 or payload_len > 65535) return error.ProtocolError;
-            break :blk 2;
-        },
-        127 => blk: {
-            if (payload_len > types.MaxPayloadLen) return error.InvalidLength;
-            if (payload_len < 65536) return error.ProtocolError;
-            break :blk 8;
-        },
+    const marker: u7 = if (payload_len < 126)
+        @intCast(payload_len)
+    else if (payload_len <= 65535)
+        126
+    else
+        127;
+
+    if (header.payload_len != marker) return error.ProtocolError;
+    if (op.is_control() and (!header.fin or payload_len > 125)) return error.ProtocolError;
+    if (header.mask and masking_key == null) return error.MaskingKeyRequired;
+    if (!header.mask and masking_key != null) return error.ProtocolError;
+
+    const extended_size: usize = switch (marker) {
+        126 => 2,
+        127 => 8,
         else => 0,
     };
-    const actual_len: u64 = if (header.payload_len < 126) header.payload_len else payload_len;
-
-    if (op.is_control() and (!header.fin or actual_len > 125)) return error.ProtocolError;
-    if (header.mask and masking_key == null) return error.MaskingKeyRequired;
-
     const required_size = 2 + extended_size + if (header.mask) types.MaskingKeyLen else 0;
 
     if (buf.len < required_size) return error.BufferTooShort;
@@ -123,10 +143,10 @@ pub fn encode_header(
 
     var index: usize = 2;
 
-    if (header.payload_len == 126) {
+    if (marker == 126) {
         std.mem.writeInt(u16, buf[index .. index + 2][0..2], @intCast(payload_len), .big);
         index += 2;
-    } else if (header.payload_len == 127) {
+    } else if (marker == 127) {
         std.mem.writeInt(u64, buf[index .. index + 8][0..8], payload_len, .big);
         index += 8;
     }
@@ -146,7 +166,7 @@ pub fn decode_header(buf: []const u8) types.Error!DecodedHeader {
 
     const header_int = std.mem.readInt(u16, buf[0..2][0..2], .little);
     const header: types.FrameHeader = @bitCast(header_int);
-    const op: types.Opcode = @enumFromInt(header.opcode);
+    const op: types.Opcode = @fromBackingInt(header.opcode);
 
     if (header.rsv1 or header.rsv2 or header.rsv3) return error.ProtocolError;
 
@@ -158,6 +178,7 @@ pub fn decode_header(buf: []const u8) types.Error!DecodedHeader {
     if (op.is_control() and (header.payload_len >= 126 or !header.fin)) return error.ProtocolError;
 
     const decoded_len = try read_length(buf, header.payload_len);
+    if (op == .close and decoded_len.payload_len == 1) return error.ProtocolError;
 
     if (!header.mask) {
         return .{
@@ -183,6 +204,7 @@ pub fn decode_header(buf: []const u8) types.Error!DecodedHeader {
 
 // Pure: validates a close frame payload code and UTF-8 reason
 pub fn validate_close_payload(payload: []const u8) types.Error!void {
+    if (payload.len > 125) return error.ProtocolError;
     if (payload.len == 0) return;
     if (payload.len == 1) return error.ProtocolError;
 
@@ -192,6 +214,6 @@ pub fn validate_close_payload(payload: []const u8) types.Error!void {
 }
 
 // Close codes permitted on the wire by RFC 6455 and IANA registrations
-fn is_valid_close_code(code: u16) bool {
+pub fn is_valid_close_code(code: u16) bool {
     return (code >= 1000 and code <= 1003) or (code >= 1007 and code <= 1014) or (code >= 3000 and code <= 4999);
 }
