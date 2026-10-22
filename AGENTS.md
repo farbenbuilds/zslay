@@ -14,6 +14,16 @@ Core code must remain zero-allocation and I/O-agnostic. Use caller-provided buff
 
 `.opencode/agents/` and `.codex/agents/` provide matching specialized agents for parser, event-loop, C ABI, Node-API, tests, review, release, and docs work. Both also provide an `architect` → `developer` → `reviewer` → `integrator` team procedure. Read `AGENT_DIRECTORY.md` for the roster, ownership map, workflow, and skill coverage. Each agent follows its listed skills and repository checks. Keep one owner per pull request scope and hand cross-scope work to the owning specialist.
 
+## Skills
+
+Shared project skills live in `.agents/skills/` and are locked by `skills-lock.json`. Platform copies from the graphify installer live in `.opencode/skills/graphify/` and `.codex/skills/graphify/` and are version-stamped by `.graphify_version`. `SKILL.md` is the human-readable catalog; `AGENT_DIRECTORY.md` is the source of truth for agent-to-skill coverage.
+
+- Zig work uses `zig-0-17`, `zig-best-practices`, and `zig-testing`. The repository still pins Zig 0.16.0 in `flake.nix` and `build.zig.zon`; treat `zig-0-17` as migration guidance until that pin changes.
+- Architecture and design work uses `improve-codebase-architecture`, `codebase-design`, `grilling`, `grill-me`, and `domain-modeling`. The architect is read-only; route report and glossary/ADR writes to the developer or `zslay-docs`.
+- Review work uses `thermo-nuclear-code-quality-review` for strict maintainability findings in addition to the repository review checklist.
+- JavaScript and TypeScript tooling under Node bindings uses `install-anti-slop` once `bindings/node/` and an Oxlint configuration exist; the skill is staged until then.
+- Codebase questions use `graphify` before raw search when `graphify-out/graph.json` exists.
+
 ## Build, Test, and Development Commands
 
 Enter the pinned Zig 0.16.0 environment before development:
@@ -47,13 +57,13 @@ Pull requests must explain what changed and why, identify the change type, link 
 
 ## graphify
 
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+This project has a knowledge graph at `graphify-out/` with god nodes, community structure, and cross-file relationships. The graph is installed for OpenCode (`.opencode/skills/graphify/`, `.opencode/plugins/graphify.js`) and Codex (`.codex/skills/graphify/`, `.codex/hooks.json`). `graphify-out/` is gitignored; rebuild it locally with `graphify update .`.
 
 When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
 
 Rules:
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- When `graphify-out/graph.json` exists, run `graphify query "<question>"` before the first grep, search, or source-file read for a codebase question, and put this rule in every subagent prompt that explores code. Read raw files only for lines the graph or an earlier read already located. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than `GRAPH_REPORT.md` or raw grep output.
+- `graphify-out/` is a generated, gitignored artifact. Do not commit it or treat a large local diff as churn.
+- If `graphify-out/wiki/index.md` exists, use it for broad navigation instead of raw source browsing.
+- Read `graphify-out/GRAPH_REPORT.md` only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

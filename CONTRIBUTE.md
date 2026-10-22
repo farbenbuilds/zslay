@@ -99,10 +99,11 @@ pre-commit run --all-files
 Specialized sub-agents are defined for OpenCode in `.opencode/agents/` and for Codex in `.codex/agents/`. They follow the same repository rules as human contributors: one scope per change, `zig fmt --check .`, and `zig build test` before review.
 
 - Use `zslay-parser`, `zslay-event-loop`, `zslay-c-abi`, `zslay-node-api`, `zslay-testing`, `zslay-release`, and `zslay-docs` for isolated work in their owned paths.
-- Use `zslay-review` (read-only) before opening or merging a pull request.
+- Use `zslay-review` (read-only) before opening or merging a pull request. Strict maintainability passes use `thermo-nuclear-code-quality-review`.
 - Agents hand cross-scope changes to the owning agent instead of editing outside their scope.
 - Do not let an agent commit, push, tag, or open a pull request unless you explicitly asked for it.
-- For coordinated work, use the architect → developer → reviewer → integrator sequence. The detailed roster, ownership, and skill coverage live in [AGENT_DIRECTORY.md](AGENT_DIRECTORY.md).
+- For coordinated work, use the architect → developer → reviewer → integrator sequence. The architect may run `improve-codebase-architecture`, `codebase-design`, `grilling`, and `grill-me` for design work; domain document writes go to `zslay-docs`.
+- For codebase questions, run `graphify query` before raw search when `graphify-out/graph.json` exists. The detailed roster, ownership, and skill coverage live in [AGENT_DIRECTORY.md](AGENT_DIRECTORY.md).
 
 The roster, owned paths, delegation rules, and skill coverage matrix live in [AGENT_DIRECTORY.md](AGENT_DIRECTORY.md).
 

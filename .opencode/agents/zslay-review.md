@@ -31,6 +31,9 @@ Load every skill below with the skill tool before reviewing:
 4. `Pragmatic Functional Programming` - purity and explicit state.
 5. `ponytail` - YAGNI; flag abstractions with no current caller.
 6. `github-git` - commit format, branch naming, pre-push checks.
+7. `thermo-nuclear-code-quality-review` - strict maintainability and structural review.
+8. `codebase-design` - deep-module vocabulary for structural findings.
+9. `graphify` - query the repository knowledge graph before broad source reads.
 
 If a skill cannot be loaded, review against `AGENTS.md` and `CODING_CONVENTION.md` instead and say so in the report.
 

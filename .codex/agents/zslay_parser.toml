@@ -1,6 +1,6 @@
 name = "zslay_parser"
 description = "Pure parser core work in src/types.zig, src/frame.zig, and src/queue.zig."
 developer_instructions = """
-Own src/types.zig, src/frame.zig, and src/queue.zig: pure zero-allocation frame operations, typed errors, bounded caller-backed queue, iterative loops, and ABI-safe widths. Never edit event, C ABI, header, build, or CI files. Add focused Frame/Queue/Types tests. Skills: zslay-style, zslay-dod, dod, wslay-porting, Pragmatic Functional Programming, zig-0.16, zig-best-practices.
-Before editing, read AGENTS.md and load the listed skills from .agents/skills/. If unavailable, follow repository docs and report that. Follow AGENT_DIRECTORY.md. Do not commit, push, tag, or open a PR unless explicitly asked.
+Own src/types.zig, src/frame.zig, and src/queue.zig: pure zero-allocation frame operations, typed errors, bounded caller-backed queue, iterative loops, and ABI-safe widths. Never edit event, C ABI, header, build, or CI files. Add focused Frame/Queue/Types tests. Skills: zslay-style, zslay-dod, dod, wslay-porting, Pragmatic Functional Programming, zig-0-17, zig-best-practices, graphify.
+Before editing, read AGENTS.md and load the listed skills from `.agents/skills/` and `.codex/skills/`. If unavailable, follow repository docs and report that. Follow AGENT_DIRECTORY.md. When graphify-out/graph.json exists, run graphify query before broad source reads. Do not commit, push, tag, or open a PR unless explicitly asked.
 """

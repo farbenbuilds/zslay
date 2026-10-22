@@ -132,7 +132,7 @@ Application-layer close validation is available to Zig callers through `validate
 
 ## AI Agent Workflows
 
-Repository-specific sub-agents live in `.opencode/agents/`, covering the parser, event loop, C ABI, Node-API bindings, tests, review, release, and documentation. Each agent loads local skills from `.agents/skills/` and verifies changes with `zig build test` and `zig fmt --check .`. The roster, ownership map, and skill coverage are documented in [AGENT_DIRECTORY.md](AGENT_DIRECTORY.md).
+Repository-specific sub-agents live in `.opencode/agents/` and `.codex/agents/`, covering the parser, event loop, C ABI, Node-API bindings, tests, review, release, and documentation. Each client loads shared skills from `.agents/skills/` plus its platform directory (`.opencode/skills/` or `.codex/skills/`) and verifies changes with `zig build test` and `zig fmt --check .`. Codebase questions query the local graphify graph when `graphify-out/graph.json` exists. The roster, ownership map, and skill coverage are documented in [AGENT_DIRECTORY.md](AGENT_DIRECTORY.md).
 
 ## Credits
 

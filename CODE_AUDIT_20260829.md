@@ -1,5 +1,7 @@
 # Code Audit — 2026-08-29
 
+> Historical snapshot: this audit reflects the repository at the revision below. Skill paths that mention `zig-0.16` predate the replacement with `zig-0-17` and are retained as audit evidence.
+
 ## Audit Status
 
 | Field | Result |
