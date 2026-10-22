@@ -15,6 +15,7 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 #ifdef MSG_NOSIGNAL
@@ -27,6 +28,9 @@ enum {
     MAX_CLIENTS = 128,
     MAX_MESSAGE = 4096,
     MAX_HANDSHAKE = 4096,
+    ACCEPT_BUDGET = 16,
+    POLL_TIMEOUT_MS = 1000,
+    IDLE_TIMEOUT_SECONDS = 30,
 };
 
 enum client_phase {
@@ -41,9 +45,14 @@ struct client {
     enum client_phase phase;
     void *conn_mem;
     void *node_mem;
+    void *tx_mem;
     void *conn;
     char handshake[MAX_HANDSHAKE];
     size_t handshake_len;
+    uint8_t prebuffer[MAX_HANDSHAKE];
+    size_t prebuffer_len;
+    size_t prebuffer_offset;
+    time_t last_active;
     char response[256];
     size_t response_len;
     size_t response_sent;
@@ -60,6 +69,9 @@ struct client {
 };
 
 static struct client clients[MAX_CLIENTS];
+
+static void service_websocket(struct client *client);
+static size_t find_handshake_end(const char *buf, size_t len, size_t start);
 
 static uint32_t rotate_left(uint32_t value, unsigned int count)
 {
@@ -201,6 +213,15 @@ static void retire_client(struct client *client)
 static ptrdiff_t recv_frame(uint8_t *buf, size_t len, void *user_data)
 {
     struct client *client = user_data;
+
+    if (client->prebuffer_offset < client->prebuffer_len) {
+        size_t available = client->prebuffer_len - client->prebuffer_offset;
+        size_t count = len < available ? len : available;
+        memcpy(buf, client->prebuffer + client->prebuffer_offset, count);
+        client->prebuffer_offset += count;
+        return (ptrdiff_t)count;
+    }
+
     ssize_t got = recv(client->fd, buf, len, 0);
     if (got > 0)
         return got;
@@ -395,23 +416,61 @@ static int self_test(void)
     if (prepare_handshake(&client) != 0 ||
         !strstr(client.response, "Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n"))
         return -1;
+
+    static const char split_first[] = "GET / HTTP/1.1\r\nSec-WebSocket-Version: 13\r";
+    static const char split_second[] = "\n\r\n";
+    char split[sizeof(split_first) + sizeof(split_second)];
+    size_t first_len = sizeof(split_first) - 1;
+    memcpy(split, split_first, first_len);
+    if (find_handshake_end(split, first_len, 0) != 0)
+        return -1;
+    memcpy(split + first_len, split_second, sizeof(split_second) - 1);
+    if (find_handshake_end(split, first_len + sizeof(split_second) - 1, first_len) == 0)
+        return -1;
+    return 0;
+}
+
+static size_t find_handshake_end(const char *buf, size_t len, size_t start)
+{
+    if (len < 4)
+        return 0;
+    if (start > len)
+        start = len;
+    start = start > 3 ? start - 3 : 0;
+
+    for (size_t i = start; i + 4 <= len; i++) {
+        if (memcmp(buf + i, "\r\n\r\n", 4) == 0)
+            return i + 4;
+    }
     return 0;
 }
 
 static void read_handshake(struct client *client)
 {
     while (client->handshake_len < MAX_HANDSHAKE - 1) {
-        ssize_t got = recv(client->fd, client->handshake + client->handshake_len, 1, 0);
-        if (got == 1) {
-            client->handshake_len++;
+        size_t space = MAX_HANDSHAKE - 1 - client->handshake_len;
+        size_t old_len = client->handshake_len;
+        ssize_t got = recv(client->fd, client->handshake + client->handshake_len, space, 0);
+        if (got > 0) {
+            client->handshake_len += (size_t)got;
             client->handshake[client->handshake_len] = 0;
-            if (client->handshake_len >= 4 &&
-                memcmp(client->handshake + client->handshake_len - 4, "\r\n\r\n", 4) == 0) {
-                if (prepare_handshake(client) != 0)
-                    retire_client(client);
-                return;
+
+            size_t header_len = find_handshake_end(client->handshake, client->handshake_len, old_len);
+            if (header_len == 0)
+                continue;
+
+            size_t leftover = client->handshake_len - header_len;
+            if (leftover > 0) {
+                memcpy(client->prebuffer, client->handshake + header_len, leftover);
+                client->prebuffer_len = leftover;
+                client->prebuffer_offset = 0;
             }
-            continue;
+            client->handshake_len = header_len;
+            client->handshake[header_len] = 0;
+
+            if (prepare_handshake(client) != 0)
+                retire_client(client);
+            return;
         }
         if (got < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
             return;
@@ -436,19 +495,28 @@ static void write_handshake(struct client *client)
         return;
     }
     client->phase = PHASE_WEBSOCKET;
+    if (client->prebuffer_offset < client->prebuffer_len)
+        service_websocket(client);
 }
 
 static void service_websocket(struct client *client)
 {
     int status;
+    size_t pending = 0;
     if (client->pending) {
         client->send_blocked = 0;
         status = zslay_conn_send(client->conn);
-        if (status != ZSLAY_OK || client->failed) {
+        if (client->failed || (status != ZSLAY_OK && status != ZSLAY_PROGRESS)) {
             retire_client(client);
             return;
         }
         if (client->send_blocked)
+            return;
+        if (zslay_conn_tx_pending(client->conn, &pending) != ZSLAY_OK) {
+            retire_client(client);
+            return;
+        }
+        if (pending != 0)
             return;
         client->pending = 0;
         if (client->pending_binary)
@@ -481,9 +549,14 @@ static int init_client_storage(void)
         return -1;
     for (int i = 0; i < MAX_CLIENTS; i++) {
         clients[i].fd = -1;
+        clients[i].conn_mem = NULL;
+        clients[i].node_mem = NULL;
+        clients[i].tx_mem = NULL;
         if (posix_memalign(&clients[i].conn_mem, conn_align < sizeof(void *) ? sizeof(void *) : conn_align,
                            conn_size) != 0 ||
             posix_memalign(&clients[i].node_mem, node_align < sizeof(void *) ? sizeof(void *) : node_align,
+                           node_size) != 0 ||
+            posix_memalign(&clients[i].tx_mem, node_align < sizeof(void *) ? sizeof(void *) : node_align,
                            node_size) != 0)
             return -1;
     }
@@ -492,7 +565,7 @@ static int init_client_storage(void)
 
 static void accept_clients(int listen_fd)
 {
-    for (;;) {
+    for (int accepted = 0; accepted < ACCEPT_BUDGET; accepted++) {
         int fd = accept(listen_fd, NULL, NULL);
         struct client *client = NULL;
         if (fd < 0) {
@@ -512,19 +585,24 @@ static void accept_clients(int listen_fd)
         }
         if (!client) {
             close(fd);
-            continue;
+            return;
         }
         client->fd = fd;
         client->phase = PHASE_REQUEST;
         client->handshake_len = 0;
+        client->prebuffer_len = 0;
+        client->prebuffer_offset = 0;
         client->message_len = 0;
         client->control_len = 0;
         client->pending = 0;
         client->pending_binary = 0;
         client->close_after_send = 0;
         client->failed = 0;
+        client->recv_blocked = 0;
+        client->send_blocked = 0;
+        client->last_active = time(NULL);
         client->conn = zslay_conn_init(client->conn_mem, client, recv_frame, send_frame,
-                                       on_frame, NULL, client->node_mem, 1,
+                                       on_frame, NULL, client->tx_mem, 1,
                                        ZSLAY_ROLE_SERVER, MAX_MESSAGE, MAX_MESSAGE);
         if (!client->conn)
             retire_client(client);
@@ -581,6 +659,7 @@ int main(int argc, char **argv)
     printf("READY %ld\n", port);
     fflush(stdout);
     for (;;) {
+        time_t now = time(NULL);
         fds[0].fd = listen_fd;
         fds[0].events = POLLIN;
         for (int i = 0; i < MAX_CLIENTS; i++) {
@@ -589,7 +668,7 @@ int main(int argc, char **argv)
             fds[i + 1].events = client->phase == PHASE_RESPONSE ||
                                 (client->phase == PHASE_WEBSOCKET && client->pending) ? POLLOUT : POLLIN;
         }
-        if (poll(fds, MAX_CLIENTS + 1, -1) < 0) {
+        if (poll(fds, MAX_CLIENTS + 1, POLL_TIMEOUT_MS) < 0) {
             if (errno == EINTR)
                 continue;
             perror("poll");
@@ -599,8 +678,15 @@ int main(int argc, char **argv)
             accept_clients(listen_fd);
         for (int i = 0; i < MAX_CLIENTS; i++) {
             struct client *client = &clients[i];
-            if (client->phase == PHASE_UNUSED || !fds[i + 1].revents)
+            if (client->phase == PHASE_UNUSED)
                 continue;
+            if (now - client->last_active >= IDLE_TIMEOUT_SECONDS) {
+                retire_client(client);
+                continue;
+            }
+            if (!fds[i + 1].revents)
+                continue;
+            client->last_active = now;
             if (fds[i + 1].revents & (POLLERR | POLLNVAL)) {
                 retire_client(client);
                 continue;

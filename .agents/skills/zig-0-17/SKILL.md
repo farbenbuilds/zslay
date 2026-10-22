@@ -16,7 +16,7 @@ metadata:
 > **Version Scope**: Pinned to **Zig 0.17.0** (stable).
 > **Release Notes**: https://ziglang.org/download/0.17.0/release-notes.html
 >
-> **Repository note**: `zslay` still pins Zig 0.16.0 in `flake.nix` and `build.zig.zon`. Use this skill for migration planning only until that pin moves; do not apply 0.17-only APIs to the current tree.
+> **Repository note**: `zslay` pins Zig 0.17.0 in `flake.nix` and `build.zig.zon`; this is the active toolchain guidance.
 
 Zig 0.17.0 advances language stability towards 1.0. Major highlights include replacing `@intFromEnum`/`@enumFromInt` with `@backingInt`/`@fromBackingInt`, moving type reflection (`std.lang.Type`) and container builtins to Struct-Of-Arrays (SoA) style, removing array multiplication syntax `**` in favor of `@splat`, replacing `DebugAllocator` with the thread-safe `SafeAllocator`, moving `fmt.allocPrint` into `mem.Allocator`, decoupling C translation to an external package, and separating the Build System into distinct Configurer and Maker processes with fine-grained cache poisoning tracking.
 

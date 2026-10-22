@@ -69,7 +69,7 @@ Every repository skill is loaded by at least one agent.
 | `thermo-nuclear-code-quality-review` | review, team reviewer |
 | `install-anti-slop` | node-api (staged until `bindings/node/` and Oxlint configuration exist) |
 
-`zig-0-17` is installed for the planned 0.17 migration. The repository still pins Zig 0.16.0 in `flake.nix` and `build.zig.zon`; agents must not change toolchain-dependent APIs until that pin moves.
+`zig-0-17` is the active toolchain guidance. The repository pins Zig 0.17.0 in `flake.nix` and `build.zig.zon`; use 0.17 APIs directly.
 
 `grill-me` delegates to `grilling`. `improve-codebase-architecture` uses `codebase-design`, `grilling`, and `domain-modeling`; the read-only architect runs only the exploration and grilling phases and hands report or domain-doc writes to the developer or `zslay-docs`. The architecture and strict-review skills are model-invocable so sub-agents can load them; a future `npx skills update` may restore the upstream `disable-model-invocation` flag and the OpenAI manifest policy.
 

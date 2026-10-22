@@ -40,16 +40,25 @@ const CApiHarness = struct {
     over_report_send: bool = false,
 
     chunk_count: usize = 0,
-    chunk_lens: [4]usize = [_]usize{0} ** 4,
-    chunk_offsets: [4]u64 = [_]u64{0} ** 4,
-    chunk_totals: [4]u64 = [_]u64{0} ** 4,
-    chunk_ends: [4]u8 = [_]u8{0} ** 4,
-    chunk_fins: [4]u8 = [_]u8{0} ** 4,
-    received: [5000]u8 = [_]u8{0} ** 5000,
+    chunk_lens: [4]usize = @splat(0),
+    chunk_offsets: [4]u64 = @splat(0),
+    chunk_totals: [4]u64 = @splat(0),
+    chunk_ends: [4]u8 = @splat(0),
+    chunk_fins: [4]u8 = @splat(0),
+    received: [5000]u8 = @splat(0),
     received_len: usize = 0,
 
-    sent: [64]u8 = [_]u8{0} ** 64,
+    sent: [8192]u8 = @splat(0),
     sent_len: usize = 0,
+    send_limit: usize = 0,
+
+    conn: ?*anyopaque = null,
+    conn_mem: ?*anyopaque = null,
+    tx_nodes: ?*anyopaque = null,
+    reenter: bool = false,
+    reenter_init: bool = false,
+    reentrant_result: c_int = 0,
+    reentrant_init: ?*anyopaque = null,
 
     mask_result: c_int = 0,
     mask_key: root.MaskingKey = .{ 1, 2, 3, 4 },
@@ -75,11 +84,12 @@ const CApiHarness = struct {
         const self = from_user_data(user_data);
         if (self.over_report_send) return @intCast(len + 1);
 
-        if (self.sent_len + len <= self.sent.len) {
-            @memcpy(self.sent[self.sent_len .. self.sent_len + len], buf[0..len]);
-            self.sent_len += len;
-        }
-        return @intCast(len);
+        const write_len = if (self.send_limit == 0) len else @min(len, self.send_limit);
+        if (self.sent_len + write_len > self.sent.len) return -1;
+
+        @memcpy(self.sent[self.sent_len .. self.sent_len + write_len], buf[0..write_len]);
+        self.sent_len += write_len;
+        return @intCast(write_len);
     }
 
     fn on_frame(
@@ -105,6 +115,25 @@ const CApiHarness = struct {
             @memcpy(self.received[self.received_len .. self.received_len + len], payload.?[0..len]);
             self.received_len += len;
         }
+
+        if (self.reenter) {
+            self.reentrant_result = c_api.zslay_conn_recv(self.conn);
+        }
+        if (self.reenter_init) {
+            self.reentrant_init = c_api.zslay_conn_init(
+                self.conn_mem,
+                self,
+                CApiHarness.recv,
+                CApiHarness.send,
+                CApiHarness.on_frame,
+                null,
+                self.tx_nodes,
+                1,
+                @backingInt(root.EndpointRole.server),
+                1024,
+                1024,
+            );
+        }
     }
 
     fn gen_mask(buf: [*]u8, len: usize, user_data: ?*anyopaque) callconv(.c) c_int {
@@ -127,6 +156,27 @@ test "DOD: Memory Layouts and Sizes" {
     try testing.expectEqual(2, @sizeOf(root.FrameHeader));
     try testing.expectEqual(4, @sizeOf(root.MaskingKey));
     try testing.expectEqual(16, @bitSizeOf(root.FrameHeader));
+}
+
+test "Types: wire bit offsets and control classification" {
+    try testing.expectEqual(0, @bitOffsetOf(root.FrameHeader, "opcode"));
+    try testing.expectEqual(4, @bitOffsetOf(root.FrameHeader, "rsv3"));
+    try testing.expectEqual(5, @bitOffsetOf(root.FrameHeader, "rsv2"));
+    try testing.expectEqual(6, @bitOffsetOf(root.FrameHeader, "rsv1"));
+    try testing.expectEqual(7, @bitOffsetOf(root.FrameHeader, "fin"));
+    try testing.expectEqual(8, @bitOffsetOf(root.FrameHeader, "payload_len"));
+    try testing.expectEqual(15, @bitOffsetOf(root.FrameHeader, "mask"));
+
+    try testing.expectEqual(14, root.MaxFrameHeaderLen);
+    try testing.expectEqual(@as(u64, 0x7fff_ffff_ffff_ffff), root.MaxPayloadLen);
+
+    try testing.expect(root.Opcode.close.is_control());
+    try testing.expect(root.Opcode.ping.is_control());
+    try testing.expect(root.Opcode.pong.is_control());
+    try testing.expect(!root.Opcode.continuation.is_control());
+    try testing.expect(!root.Opcode.text.is_control());
+    try testing.expect(!root.Opcode.binary.is_control());
+    try testing.expect(!@as(root.Opcode, @fromBackingInt(3)).is_control());
 }
 
 test "Queue: zero-allocation ring buffer" {
@@ -181,6 +231,28 @@ test "Queue: empty buffer rejects pushes" {
     try testing.expectEqual(null, q.pop_back());
 }
 
+test "Queue: capacity one wraps and clear resets indices" {
+    var backing_buffer: [1]u32 = undefined;
+    var q = root.Queue(u32).init(&backing_buffer);
+
+    try q.push_back(7);
+    try testing.expectError(error.QueueFull, q.push_front(8));
+    try testing.expectEqual(@as(u32, 7), q.pop_front().?);
+    try testing.expectEqual(null, q.front());
+
+    try q.push_front(9);
+    try testing.expectEqual(@as(u32, 9), q.pop_back().?);
+
+    try q.push_back(11);
+    try testing.expectError(error.QueueFull, q.push_back(12));
+    q.clear();
+    try testing.expectEqual(@as(usize, 0), q.len);
+    try testing.expectEqual(null, q.front());
+
+    try q.push_back(13);
+    try testing.expectEqual(@as(u32, 13), q.pop_front().?);
+}
+
 test "Frame: decode simple unmasked text frame" {
     // 0x81 (FIN + TEXT) 0x05 (length 5) -> "Hello"
     const raw = [_]u8{ 0x81, 0x05 };
@@ -191,7 +263,7 @@ test "Frame: decode simple unmasked text frame" {
     try testing.expectEqual(null, decoded.masking_key);
 
     try testing.expect(decoded.header.fin);
-    try testing.expectEqual(@intFromEnum(root.Opcode.text), decoded.header.opcode);
+    try testing.expectEqual(@backingInt(root.Opcode.text), decoded.header.opcode);
     try testing.expect(!decoded.header.mask);
 }
 
@@ -199,7 +271,7 @@ test "Frame: encode and decode masked binary frame with extended length" {
     var buf: [16]u8 = undefined;
 
     const header = root.FrameHeader{
-        .opcode = @intFromEnum(root.Opcode.binary),
+        .opcode = @backingInt(root.Opcode.binary),
         .rsv3 = false,
         .rsv2 = false,
         .rsv1 = false,
@@ -219,7 +291,7 @@ test "Frame: encode and decode masked binary frame with extended length" {
     try testing.expectEqual(key, decoded.masking_key.?);
     try testing.expect(decoded.header.fin);
     try testing.expect(decoded.header.mask);
-    try testing.expectEqual(@intFromEnum(root.Opcode.binary), decoded.header.opcode);
+    try testing.expectEqual(@backingInt(root.Opcode.binary), decoded.header.opcode);
 }
 
 test "Frame: XOR masking (vectorized and scalar paths)" {
@@ -260,12 +332,98 @@ test "Frame: masking offset wraps past key length" {
 }
 
 test "Frame: serialized size boundaries" {
-    try testing.expectEqual(2, root.get_serialized_size(0, false));
-    try testing.expectEqual(6, root.get_serialized_size(125, true));
-    try testing.expectEqual(4, root.get_serialized_size(126, false));
-    try testing.expectEqual(8, root.get_serialized_size(126, true));
-    try testing.expectEqual(10, root.get_serialized_size(65536, false));
-    try testing.expectEqual(14, root.get_serialized_size(65536, true));
+    try testing.expectEqual(2, try root.get_serialized_size(0, false));
+    try testing.expectEqual(6, try root.get_serialized_size(125, true));
+    try testing.expectEqual(4, try root.get_serialized_size(126, false));
+    try testing.expectEqual(8, try root.get_serialized_size(126, true));
+    try testing.expectEqual(10, try root.get_serialized_size(65536, false));
+    try testing.expectEqual(14, try root.get_serialized_size(65536, true));
+    try testing.expectEqual(10, try root.get_serialized_size(root.MaxPayloadLen, false));
+    try testing.expectError(error.InvalidLength, root.get_serialized_size(root.MaxPayloadLen + 1, false));
+}
+
+test "Frame: encode derives the wire marker from the payload length" {
+    var buf: [16]u8 = @splat(0xa5);
+    const key = root.MaskingKey{ 1, 2, 3, 4 };
+
+    const short_header = root.FrameHeader{
+        .opcode = @backingInt(root.Opcode.text),
+        .rsv3 = false,
+        .rsv2 = false,
+        .rsv1 = false,
+        .fin = true,
+        .payload_len = 5,
+        .mask = false,
+    };
+
+    try testing.expectError(error.ProtocolError, root.encode_header(&buf, short_header, 70000, null));
+    try testing.expectEqualSlices(u8, &@as([16]u8, @splat(0xa5)), &buf);
+
+    var ping_header = short_header;
+    ping_header.opcode = @backingInt(root.Opcode.ping);
+    ping_header.payload_len = 0;
+    try testing.expectError(error.ProtocolError, root.encode_header(&buf, ping_header, 1000, null));
+
+    try testing.expectEqual(2, try root.encode_header(&buf, short_header, 5, null));
+    try testing.expectEqual(@as(u8, 5), buf[1] & 0x7f);
+
+    var masked = short_header;
+    masked.mask = true;
+    try testing.expectError(error.MaskingKeyRequired, root.encode_header(&buf, masked, 5, null));
+    try testing.expectError(error.ProtocolError, root.encode_header(&buf, short_header, 5, key));
+
+    var empty_header = short_header;
+    empty_header.payload_len = 0;
+    var empty: [0]u8 = .{};
+    try testing.expectError(error.BufferTooShort, root.encode_header(&empty, empty_header, 0, null));
+}
+
+test "Frame: masking matches a byte-wise reference at every offset" {
+    const key = root.MaskingKey{ 0xA5, 0x5A, 0x11, 0xEE };
+    const lengths = [_]usize{ 0, 1, 3, 4, 7, 8, 9, 15, 16, 17, 31, 32, 33 };
+
+    for (lengths) |len| {
+        for (0..8) |offset| {
+            var original: [64]u8 = undefined;
+            for (&original, 0..) |*byte, index| byte.* = @truncate(index *% 37);
+
+            var masked = original;
+            var expected = original;
+            for (expected[0..len], 0..) |*byte, index| {
+                byte.* ^= key[(offset + index) % key.len];
+            }
+
+            root.mask(masked[0..len], key, offset);
+            try testing.expectEqualSlices(u8, expected[0..len], masked[0..len]);
+
+            root.mask(masked[0..len], key, offset);
+            try testing.expectEqualSlices(u8, original[0..len], masked[0..len]);
+        }
+    }
+}
+
+test "Frame: header byte count follows wire markers and mask bit" {
+    try testing.expectEqual(2, root.header_bytes_needed(0x01));
+    try testing.expectEqual(4, root.header_bytes_needed(0x7e));
+    try testing.expectEqual(10, root.header_bytes_needed(0x7f));
+    try testing.expectEqual(6, root.header_bytes_needed(0x81));
+    try testing.expectEqual(8, root.header_bytes_needed(0xfe));
+    try testing.expectEqual(14, root.header_bytes_needed(0xff));
+}
+
+test "Frame: close validation rejects oversized and one-byte payloads" {
+    var oversized: [126]u8 = @splat(0);
+    std.mem.writeInt(u16, oversized[0..2], 1000, .big);
+    try testing.expectError(error.ProtocolError, root.validate_close_payload(&oversized));
+
+    try testing.expectError(
+        error.ProtocolError,
+        root.decode_header(&[_]u8{ 0x88, 0x01 }),
+    );
+    try testing.expectError(
+        error.ProtocolError,
+        root.validate_close_payload(&[_]u8{0x03}),
+    );
 }
 
 test "Connection: stream extended headers before payload" {
@@ -278,7 +436,7 @@ test "Connection: stream extended headers before payload" {
 
 test "Frame: reject inconsistent extended length markers before writing" {
     const base = root.FrameHeader{
-        .opcode = @intFromEnum(root.Opcode.binary),
+        .opcode = @backingInt(root.Opcode.binary),
         .rsv3 = false,
         .rsv2 = false,
         .rsv1 = false,
@@ -287,7 +445,7 @@ test "Frame: reject inconsistent extended length markers before writing" {
         .mask = false,
     };
 
-    var short_buf = [_]u8{0xa5} ** 2;
+    var short_buf: [2]u8 = @splat(0xa5);
     try testing.expectError(error.ProtocolError, root.encode_header(&short_buf, base, 125, null));
     try testing.expectEqualSlices(u8, &[_]u8{ 0xa5, 0xa5 }, &short_buf);
 
@@ -375,7 +533,7 @@ test "Connection: enforce endpoint masking direction" {
     server = try init_conn(&server_nodes, .server, 1024, 1024);
     const masked_empty = [_]u8{ 0x81, 0x80, 1, 2, 3, 4 };
     try testing.expectEqual(root.RxAction.emit_frame, try load_header(&server, &masked_empty));
-    server.complete_frame();
+    try server.complete_frame();
 
     var client_nodes: [1]root.FrameNode = undefined;
     var client = try init_conn(&client_nodes, .client, 1024, 1024);
@@ -394,7 +552,7 @@ test "Connection: enforce frame and fragmented message limits" {
     conn = try init_conn(&nodes, .client, 10, 10);
     try testing.expectEqual(root.RxAction.need_payload, try load_header(&conn, &[_]u8{ 0x01, 6 }));
     try conn.advance_payload_read(6);
-    conn.complete_frame();
+    try conn.complete_frame();
 
     try testing.expectError(error.PayloadTooLarge, load_header(&conn, &[_]u8{ 0x80, 5 }));
 }
@@ -407,24 +565,24 @@ test "Connection: validate fragmented frame ordering" {
 
     conn = try init_conn(&nodes, .client, 1024, 1024);
     try testing.expectEqual(root.RxAction.emit_frame, try load_header(&conn, &[_]u8{ 0x01, 0x00 }));
-    conn.complete_frame();
+    try conn.complete_frame();
 
     try testing.expectEqual(root.RxAction.emit_frame, try load_header(&conn, &[_]u8{ 0x89, 0x00 }));
-    conn.complete_frame();
+    try conn.complete_frame();
     try testing.expect(conn.rx_fragment.opcode != null);
 
     var invalid_nodes: [1]root.FrameNode = undefined;
     var invalid = try init_conn(&invalid_nodes, .client, 1024, 1024);
     try testing.expectEqual(root.RxAction.emit_frame, try load_header(&invalid, &[_]u8{ 0x01, 0x00 }));
-    invalid.complete_frame();
+    try invalid.complete_frame();
     try testing.expectError(error.ProtocolError, load_header(&invalid, &[_]u8{ 0x82, 0x00 }));
 
     try testing.expectEqual(root.RxAction.emit_frame, try load_header(&conn, &[_]u8{ 0x00, 0x00 }));
-    conn.complete_frame();
+    try conn.complete_frame();
     try testing.expect(conn.rx_fragment.opcode != null);
 
     try testing.expectEqual(root.RxAction.emit_frame, try load_header(&conn, &[_]u8{ 0x80, 0x00 }));
-    conn.complete_frame();
+    try conn.complete_frame();
     try testing.expectEqual(null, conn.rx_fragment.opcode);
 }
 
@@ -450,6 +608,10 @@ test "Connection: fail closed for masking keys and outbound direction" {
         error.PayloadMasked,
         server.prepare_frame(true, .text, payload, true, key),
     );
+    try testing.expectError(
+        error.ProtocolError,
+        server.prepare_frame(true, .text, payload, false, key),
+    );
     _ = try server.prepare_frame(true, .text, payload, false, null);
     try testing.expectError(
         error.PayloadTooLarge,
@@ -470,6 +632,84 @@ test "Connection: empty transmit queue accessors are safe" {
     try testing.expectEqual(@as(usize, 0), conn.get_tx_header_buffer().len);
     try testing.expectError(error.InvalidLength, conn.advance_tx_header(0));
     try testing.expectError(error.InvalidLength, conn.advance_tx_header(1));
+}
+
+test "Connection: zero-byte advances are rejected" {
+    var nodes: [1]root.FrameNode = undefined;
+    var conn = try init_conn(&nodes, .client, 1024, 1024);
+
+    try testing.expectError(error.InvalidLength, conn.advance_header_read(0));
+
+    try testing.expectEqual(root.RxAction.need_payload, try load_header(&conn, &[_]u8{ 0x81, 0x05 }));
+    try testing.expectError(error.InvalidLength, conn.advance_payload_read(0));
+    try testing.expectError(error.InvalidLength, conn.advance_payload_read(6));
+
+    var tx_nodes: [1]root.FrameNode = undefined;
+    var tx_conn = try init_conn(&tx_nodes, .server, 1024, 1024);
+    const node = try tx_conn.prepare_frame(true, .text, "hello", false, null);
+    try tx_conn.queue_frame(node);
+    try testing.expectError(error.InvalidLength, tx_conn.advance_tx_header(0));
+}
+
+test "Connection: complete_frame rejects partial payload and reset recovers" {
+    var nodes: [1]root.FrameNode = undefined;
+    var conn = try init_conn(&nodes, .client, 1024, 1024);
+
+    try testing.expectEqual(root.RxAction.need_payload, try load_header(&conn, &[_]u8{ 0x81, 0x05 }));
+    try conn.advance_payload_read(2);
+    try testing.expectError(error.ProtocolError, conn.complete_frame());
+    try testing.expect(!conn.is_at_frame_boundary());
+
+    conn.reset_rx();
+    try testing.expect(conn.is_at_frame_boundary());
+    try testing.expectError(error.ProtocolError, load_header(&conn, &[_]u8{ 0x80, 0x00 }));
+}
+
+test "Connection: transmit accessors expose payload progress and masking" {
+    var server_nodes: [1]root.FrameNode = undefined;
+    var server = try init_conn(&server_nodes, .server, 1024, 1024);
+    const unmasked = try server.prepare_frame(true, .text, "hello", false, null);
+    try server.queue_frame(unmasked);
+
+    try testing.expectEqual(@as(usize, 1), server.tx_pending());
+    const header = server.get_tx_header_buffer();
+    try server.advance_tx_header(header.len);
+    try testing.expectEqual(root.TxAction.write_payload, server.advance_tx().?);
+    try testing.expectEqualSlices(u8, "hello", try server.get_tx_payload());
+    try testing.expectEqual(@as(usize, 0), try server.get_tx_payload_offset());
+    try testing.expectEqual(null, try server.get_tx_masking_key());
+
+    try server.advance_tx_payload(2);
+    try testing.expectEqualSlices(u8, "llo", try server.get_tx_payload());
+    try testing.expectEqual(@as(usize, 2), try server.get_tx_payload_offset());
+    try server.advance_tx_payload(3);
+    try testing.expectEqual(null, server.advance_tx());
+    try testing.expectEqual(@as(usize, 0), server.tx_pending());
+
+    var client_nodes: [1]root.FrameNode = undefined;
+    var client = try init_conn(&client_nodes, .client, 1024, 1024);
+    const key = root.MaskingKey{ 9, 8, 7, 6 };
+    const masked = try client.prepare_frame(true, .binary, "abc", true, key);
+    try client.queue_frame(masked);
+    try testing.expectEqual(key, (try client.get_tx_masking_key()).?);
+}
+
+test "Connection: reset_tx clears queued frames and fragment state" {
+    var nodes: [4]root.FrameNode = undefined;
+    var conn = try init_conn(&nodes, .server, 1024, 1024);
+
+    const start = try conn.prepare_frame(false, .text, "hello", false, null);
+    try conn.queue_frame(start);
+    try testing.expect(conn.tx_fragment.opcode != null);
+
+    conn.reset_tx();
+    try testing.expectEqual(@as(usize, 0), conn.tx_pending());
+    try testing.expectEqual(null, conn.tx_fragment.opcode);
+    try testing.expectEqual(null, conn.advance_tx());
+
+    const next = try conn.prepare_frame(true, .text, "world", false, null);
+    try conn.queue_frame(next);
+    try testing.expectEqual(@as(usize, 1), conn.tx_pending());
 }
 
 test "Connection: queued transmit header stays valid" {
@@ -537,7 +777,7 @@ test "C API: stream chunks with explicit frame completion" {
     const payload_len = 5000;
     const key = root.MaskingKey{ 0x11, 0x22, 0x33, 0x44 };
     const header = root.FrameHeader{
-        .opcode = @intFromEnum(root.Opcode.binary),
+        .opcode = @backingInt(root.Opcode.binary),
         .rsv3 = false,
         .rsv2 = false,
         .rsv1 = false,
@@ -552,7 +792,7 @@ test "C API: stream chunks with explicit frame completion" {
     root.mask(wire[header_len..], key, 0);
 
     var harness = CApiHarness{ .input = &wire };
-    var conn_mem: [1024]u8 align(64) = undefined;
+    var conn_mem: [8192]u8 align(64) = undefined;
     var tx_nodes: [1]root.FrameNode = undefined;
 
     try testing.expect(c_api.zslay_conn_get_size() <= conn_mem.len);
@@ -566,7 +806,7 @@ test "C API: stream chunks with explicit frame completion" {
         null,
         &tx_nodes,
         tx_nodes.len,
-        @intFromEnum(root.EndpointRole.server),
+        @backingInt(root.EndpointRole.server),
         payload_len,
         payload_len,
     );
@@ -599,7 +839,7 @@ test "C API: stream chunks with explicit frame completion" {
 
 test "C API: reject callback over-reporting" {
     var harness = CApiHarness{ .over_report = true };
-    var conn_mem: [1024]u8 align(64) = undefined;
+    var conn_mem: [8192]u8 align(64) = undefined;
     var tx_nodes: [1]root.FrameNode = undefined;
 
     const conn_opt = c_api.zslay_conn_init(
@@ -611,7 +851,7 @@ test "C API: reject callback over-reporting" {
         null,
         &tx_nodes,
         tx_nodes.len,
-        @intFromEnum(root.EndpointRole.server),
+        @backingInt(root.EndpointRole.server),
         1024,
         1024,
     );
@@ -625,7 +865,7 @@ test "C API: bound empty frame delivery to one frame per call" {
         0x81, 0x80, 5, 6, 7, 8,
     };
     var harness = CApiHarness{ .input = &wire };
-    var conn_mem: [1024]u8 align(64) = undefined;
+    var conn_mem: [8192]u8 align(64) = undefined;
     var tx_nodes: [1]root.FrameNode = undefined;
 
     const conn_opt = c_api.zslay_conn_init(
@@ -637,7 +877,7 @@ test "C API: bound empty frame delivery to one frame per call" {
         null,
         &tx_nodes,
         tx_nodes.len,
-        @intFromEnum(root.EndpointRole.server),
+        @backingInt(root.EndpointRole.server),
         1024,
         1024,
     );
@@ -660,7 +900,7 @@ test "C API: bound empty frame delivery to one frame per call" {
 test "C API: reject send callback over-reporting" {
     const payload = "x";
     var harness = CApiHarness{ .over_report_send = true };
-    var conn_mem: [1024]u8 align(64) = undefined;
+    var conn_mem: [8192]u8 align(64) = undefined;
     var tx_nodes: [1]root.FrameNode = undefined;
     var node: root.FrameNode = undefined;
 
@@ -673,7 +913,7 @@ test "C API: reject send callback over-reporting" {
         null,
         &tx_nodes,
         tx_nodes.len,
-        @intFromEnum(root.EndpointRole.server),
+        @backingInt(root.EndpointRole.server),
         1024,
         1024,
     );
@@ -692,11 +932,11 @@ test "C API: reject send callback over-reporting" {
 test "C API: require a successful client mask generator" {
     const payload = "x";
     var harness = CApiHarness{};
-    var conn_mem: [1024]u8 align(64) = undefined;
+    var conn_mem: [8192]u8 align(64) = undefined;
     var tx_nodes: [1]root.FrameNode = undefined;
     var node = root.FrameNode{ .header_len = 123 };
 
-    var conn_opt = c_api.zslay_conn_init(
+    try testing.expect(c_api.zslay_conn_init(
         &conn_mem,
         &harness,
         CApiHarness.recv,
@@ -705,19 +945,13 @@ test "C API: require a successful client mask generator" {
         null,
         &tx_nodes,
         tx_nodes.len,
-        @intFromEnum(root.EndpointRole.client),
+        @backingInt(root.EndpointRole.client),
         1024,
         1024,
-    );
-    try testing.expect(conn_opt != null);
-    try testing.expectEqual(
-        c_api.ResultProtocolError,
-        c_api.zslay_conn_prepare_frame(conn_opt.?, &node, 1, 1, payload.ptr, payload.len, 1),
-    );
-    try testing.expectEqual(123, node.header_len);
+    ) == null);
 
     harness.mask_result = -1;
-    conn_opt = c_api.zslay_conn_init(
+    const conn_opt = c_api.zslay_conn_init(
         &conn_mem,
         &harness,
         CApiHarness.recv,
@@ -726,7 +960,7 @@ test "C API: require a successful client mask generator" {
         CApiHarness.gen_mask,
         &tx_nodes,
         tx_nodes.len,
-        @intFromEnum(root.EndpointRole.client),
+        @backingInt(root.EndpointRole.client),
         1024,
         1024,
     );
@@ -756,7 +990,7 @@ test "C API: reset abandons receive state" {
         'h' ^ 1, 'i' ^ 2,
     };
     var harness = CApiHarness{ .input = &wire };
-    var conn_mem: [1024]u8 align(64) = undefined;
+    var conn_mem: [8192]u8 align(64) = undefined;
     var tx_nodes: [1]root.FrameNode = undefined;
 
     const conn_opt = c_api.zslay_conn_init(
@@ -768,7 +1002,7 @@ test "C API: reset abandons receive state" {
         null,
         &tx_nodes,
         tx_nodes.len,
-        @intFromEnum(root.EndpointRole.server),
+        @backingInt(root.EndpointRole.server),
         1024,
         1024,
     );
@@ -800,9 +1034,10 @@ test "C API: reset abandons receive state" {
 
 test "C API: init rejects invalid arguments" {
     var harness = CApiHarness{};
-    var conn_mem: [1024]u8 align(64) = undefined;
+    var conn_mem: [8192]u8 align(64) = undefined;
     var tx_nodes: [1]root.FrameNode = undefined;
-    const role: u8 = @intFromEnum(root.EndpointRole.server);
+    const role: u8 = @backingInt(root.EndpointRole.server);
+    var pending: usize = 0;
 
     const valid = c_api.zslay_conn_init(
         &conn_mem,
@@ -829,6 +1064,36 @@ test "C API: init rejects invalid arguments" {
         &tx_nodes,
         tx_nodes.len,
         2,
+        1024,
+        1024,
+    ) == null);
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_tx_pending(valid.?, &pending));
+    try testing.expectEqual(@as(usize, 0), pending);
+
+    try testing.expect(c_api.zslay_conn_init(
+        &conn_mem,
+        &harness,
+        CApiHarness.recv,
+        CApiHarness.send,
+        CApiHarness.on_frame,
+        null,
+        null,
+        1,
+        role,
+        1024,
+        1024,
+    ) == null);
+
+    try testing.expect(c_api.zslay_conn_init(
+        &conn_mem,
+        &harness,
+        CApiHarness.recv,
+        CApiHarness.send,
+        CApiHarness.on_frame,
+        null,
+        &conn_mem[0],
+        1,
+        role,
         1024,
         1024,
     ) == null);
@@ -893,7 +1158,7 @@ test "C API: init rejects invalid arguments" {
 test "C API: send masked client payload" {
     const payload = "hello";
     var harness = CApiHarness{};
-    var conn_mem: [1024]u8 align(64) = undefined;
+    var conn_mem: [8192]u8 align(64) = undefined;
     var tx_nodes: [1]root.FrameNode = undefined;
     var node: root.FrameNode = undefined;
 
@@ -906,7 +1171,7 @@ test "C API: send masked client payload" {
         CApiHarness.gen_mask,
         &tx_nodes,
         tx_nodes.len,
-        @intFromEnum(root.EndpointRole.client),
+        @backingInt(root.EndpointRole.client),
         1024,
         1024,
     );
@@ -915,7 +1180,7 @@ test "C API: send masked client payload" {
 
     try testing.expectEqual(
         c_api.ResultOk,
-        c_api.zslay_conn_prepare_frame(conn, &node, 1, @intFromEnum(root.Opcode.text), payload.ptr, payload.len, 1),
+        c_api.zslay_conn_prepare_frame(conn, &node, 1, @backingInt(root.Opcode.text), payload.ptr, payload.len, 1),
     );
     try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_queue_frame(conn, &node));
     try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_send(conn));
@@ -940,7 +1205,7 @@ test "C API: send masked client payload" {
 test "C API: reject out-of-range scalars" {
     const payload = "x";
     var harness = CApiHarness{};
-    var conn_mem: [1024]u8 align(64) = undefined;
+    var conn_mem: [8192]u8 align(64) = undefined;
     var tx_nodes: [1]root.FrameNode = undefined;
     var node: root.FrameNode = undefined;
 
@@ -953,13 +1218,13 @@ test "C API: reject out-of-range scalars" {
         null,
         &tx_nodes,
         tx_nodes.len,
-        @intFromEnum(root.EndpointRole.server),
+        @backingInt(root.EndpointRole.server),
         1024,
         1024,
     );
     try testing.expect(conn_opt != null);
     const conn = conn_opt.?;
-    const text = @intFromEnum(root.Opcode.text);
+    const text = @backingInt(root.Opcode.text);
 
     try testing.expectEqual(
         c_api.ResultInvalidArgument,
@@ -979,10 +1244,314 @@ test "C API: reject out-of-range scalars" {
     );
 }
 
+test "C API: prepare_frame maps close and direction errors" {
+    var harness = CApiHarness{};
+    var conn_mem: [8192]u8 align(64) = undefined;
+    var tx_nodes: [2]root.FrameNode = undefined;
+    var node: root.FrameNode = undefined;
+
+    const conn_opt = c_api.zslay_conn_init(
+        &conn_mem,
+        &harness,
+        CApiHarness.recv,
+        CApiHarness.send,
+        CApiHarness.on_frame,
+        null,
+        &tx_nodes,
+        tx_nodes.len,
+        @backingInt(root.EndpointRole.server),
+        1024,
+        1024,
+    );
+    try testing.expect(conn_opt != null);
+    const conn = conn_opt.?;
+
+    var valid_close = [_]u8{ 0x03, 0xE8 };
+    try testing.expectEqual(
+        c_api.ResultOk,
+        c_api.zslay_conn_prepare_frame(conn, &node, 1, @backingInt(root.Opcode.close), &valid_close, valid_close.len, 0),
+    );
+    try testing.expectEqual(@as(u8, 0x88), node.header_buf[0]);
+
+    try testing.expectEqual(
+        c_api.ResultProtocolError,
+        c_api.zslay_conn_prepare_frame(conn, &node, 1, @backingInt(root.Opcode.close), "x", 1, 0),
+    );
+
+    var bad_utf8_close = [_]u8{ 0x03, 0xE8, 0xff };
+    try testing.expectEqual(
+        c_api.ResultInvalidUtf8,
+        c_api.zslay_conn_prepare_frame(conn, &node, 1, @backingInt(root.Opcode.close), &bad_utf8_close, bad_utf8_close.len, 0),
+    );
+
+    try testing.expectEqual(
+        c_api.ResultInvalidArgument,
+        c_api.zslay_conn_prepare_frame(conn, &node, 1, @backingInt(root.Opcode.text), "x", 1, 1),
+    );
+
+    try testing.expectEqual(
+        c_api.ResultOk,
+        c_api.zslay_conn_prepare_frame(conn, &node, 1, @backingInt(root.Opcode.continuation), "x", 1, 0),
+    );
+    try testing.expectEqual(c_api.ResultProtocolError, c_api.zslay_conn_queue_frame(conn, &node));
+}
+
+test "C API: validate close payload export" {
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_validate_close_payload(null, 0));
+
+    var one_byte = [_]u8{0x03};
+    try testing.expectEqual(
+        c_api.ResultProtocolError,
+        c_api.zslay_validate_close_payload(&one_byte, one_byte.len),
+    );
+    try testing.expectEqual(
+        c_api.ResultInvalidArgument,
+        c_api.zslay_validate_close_payload(null, one_byte.len),
+    );
+
+    var valid = [_]u8{ 0x03, 0xE8, 'o', 'k' };
+    try testing.expectEqual(
+        c_api.ResultOk,
+        c_api.zslay_validate_close_payload(&valid, valid.len),
+    );
+
+    var bad_utf8 = [_]u8{ 0x03, 0xE8, 0xff };
+    try testing.expectEqual(
+        c_api.ResultInvalidUtf8,
+        c_api.zslay_validate_close_payload(&bad_utf8, bad_utf8.len),
+    );
+}
+
+test "C API: receive-only connection accepts null transmit storage" {
+    var harness = CApiHarness{};
+    var conn_mem: [8192]u8 align(64) = undefined;
+    var node: root.FrameNode = undefined;
+
+    const conn_opt = c_api.zslay_conn_init(
+        &conn_mem,
+        &harness,
+        CApiHarness.recv,
+        CApiHarness.send,
+        CApiHarness.on_frame,
+        null,
+        null,
+        0,
+        @backingInt(root.EndpointRole.server),
+        1024,
+        1024,
+    );
+    try testing.expect(conn_opt != null);
+    const conn = conn_opt.?;
+
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_send(conn));
+    try testing.expectEqual(
+        c_api.ResultOk,
+        c_api.zslay_conn_prepare_frame(conn, &node, 1, 1, "hi".ptr, 2, 0),
+    );
+    try testing.expectEqual(c_api.ResultQueueFull, c_api.zslay_conn_queue_frame(conn, &node));
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_reset_tx(conn));
+}
+
+test "C API: tx_pending, reset_tx, and deinit invalidate the handle" {
+    const payload = "hi";
+    var harness = CApiHarness{};
+    var conn_mem: [8192]u8 align(64) = undefined;
+    var tx_nodes: [2]root.FrameNode = undefined;
+    var node: root.FrameNode = undefined;
+    var pending: usize = 0;
+
+    const conn_opt = c_api.zslay_conn_init(
+        &conn_mem,
+        &harness,
+        CApiHarness.recv,
+        CApiHarness.send,
+        CApiHarness.on_frame,
+        null,
+        &tx_nodes,
+        tx_nodes.len,
+        @backingInt(root.EndpointRole.server),
+        1024,
+        1024,
+    );
+    try testing.expect(conn_opt != null);
+    const conn = conn_opt.?;
+
+    try testing.expectEqual(c_api.AbiVersion, c_api.zslay_abi_version());
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_tx_pending(conn, &pending));
+    try testing.expectEqual(@as(usize, 0), pending);
+
+    try testing.expectEqual(
+        c_api.ResultOk,
+        c_api.zslay_conn_prepare_frame(conn, &node, 1, 1, payload.ptr, payload.len, 0),
+    );
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_queue_frame(conn, &node));
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_tx_pending(conn, &pending));
+    try testing.expectEqual(@as(usize, 1), pending);
+
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_reset_tx(conn));
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_tx_pending(conn, &pending));
+    try testing.expectEqual(@as(usize, 0), pending);
+    try testing.expectEqual(c_api.ResultInvalidArgument, c_api.zslay_conn_tx_pending(conn, null));
+
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_deinit(conn));
+    try testing.expectEqual(c_api.ResultInvalidArgument, c_api.zslay_conn_deinit(conn));
+    try testing.expectEqual(c_api.ResultInvalidArgument, c_api.zslay_conn_reset(conn));
+    try testing.expectEqual(c_api.ResultInvalidArgument, c_api.zslay_conn_tx_pending(conn, &pending));
+}
+
+test "C API: masked partial sends preserve mask offsets" {
+    const payload_len = 5000;
+    var payload: [payload_len]u8 = undefined;
+    for (&payload, 0..) |*byte, index| byte.* = @truncate(index);
+
+    var harness = CApiHarness{ .send_limit = 1 };
+    var conn_mem: [8192]u8 align(64) = undefined;
+    var tx_nodes: [1]root.FrameNode = undefined;
+    var node: root.FrameNode = undefined;
+
+    const conn_opt = c_api.zslay_conn_init(
+        &conn_mem,
+        &harness,
+        CApiHarness.recv,
+        CApiHarness.send,
+        CApiHarness.on_frame,
+        CApiHarness.gen_mask,
+        &tx_nodes,
+        tx_nodes.len,
+        @backingInt(root.EndpointRole.client),
+        payload_len,
+        payload_len,
+    );
+    try testing.expect(conn_opt != null);
+    const conn = conn_opt.?;
+
+    try testing.expectEqual(
+        c_api.ResultOk,
+        c_api.zslay_conn_prepare_frame(conn, &node, 1, @backingInt(root.Opcode.binary), &payload, payload.len, 1),
+    );
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_queue_frame(conn, &node));
+
+    var pending: usize = 1;
+    var calls: usize = 0;
+    while (pending != 0 and calls < 10_000) : (calls += 1) {
+        const status = c_api.zslay_conn_send(conn);
+        try testing.expect(status == c_api.ResultOk or status == c_api.ResultProgress);
+        try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_tx_pending(conn, &pending));
+    }
+
+    try testing.expectEqual(@as(usize, 0), pending);
+    try testing.expectEqual(node.header_len + payload_len, harness.sent_len);
+
+    const transmitted = harness.sent[node.header_len .. node.header_len + payload_len];
+    var unmasked: [payload_len]u8 = undefined;
+    @memcpy(&unmasked, transmitted);
+    root.mask(&unmasked, harness.mask_key, 0);
+    try testing.expectEqualSlices(u8, &payload, &unmasked);
+}
+
+test "C API: reentrant receive is rejected" {
+    const wire = [_]u8{ 0x81, 0x80, 1, 2, 3, 4 };
+    var harness = CApiHarness{ .input = &wire, .reenter = true };
+    var conn_mem: [8192]u8 align(64) = undefined;
+    var tx_nodes: [1]root.FrameNode = undefined;
+
+    const conn_opt = c_api.zslay_conn_init(
+        &conn_mem,
+        &harness,
+        CApiHarness.recv,
+        CApiHarness.send,
+        CApiHarness.on_frame,
+        null,
+        &tx_nodes,
+        tx_nodes.len,
+        @backingInt(root.EndpointRole.server),
+        1024,
+        1024,
+    );
+    try testing.expect(conn_opt != null);
+    const conn = conn_opt.?;
+    harness.conn = conn;
+
+    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
+    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
+    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
+    try testing.expectEqual(@as(usize, 1), harness.chunk_count);
+    try testing.expectEqual(c_api.ResultReentrant, harness.reentrant_result);
+}
+
+test "C API: reset recovers after a protocol error" {
+    const invalid_wire = [_]u8{ 0x81, 0x00 };
+    const valid_wire = [_]u8{ 0x81, 0x80, 1, 2, 3, 4 };
+    var harness = CApiHarness{ .input = &invalid_wire };
+    var conn_mem: [8192]u8 align(64) = undefined;
+    var tx_nodes: [1]root.FrameNode = undefined;
+
+    const conn_opt = c_api.zslay_conn_init(
+        &conn_mem,
+        &harness,
+        CApiHarness.recv,
+        CApiHarness.send,
+        CApiHarness.on_frame,
+        null,
+        &tx_nodes,
+        tx_nodes.len,
+        @backingInt(root.EndpointRole.server),
+        1024,
+        1024,
+    );
+    try testing.expect(conn_opt != null);
+    const conn = conn_opt.?;
+
+    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
+    try testing.expectEqual(c_api.ResultProtocolError, c_api.zslay_conn_recv(conn));
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_reset(conn));
+
+    harness.input = &valid_wire;
+    harness.input_offset = 0;
+    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
+    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
+    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
+    try testing.expectEqual(@as(usize, 1), harness.chunk_count);
+}
+
+test "C API: reentrant init is rejected" {
+    const wire = [_]u8{ 0x81, 0x80, 1, 2, 3, 4 };
+    var harness = CApiHarness{ .input = &wire, .reenter_init = true };
+    var conn_mem: [8192]u8 align(64) = undefined;
+    var tx_nodes: [1]root.FrameNode = undefined;
+    var pending: usize = 0;
+
+    const conn_opt = c_api.zslay_conn_init(
+        &conn_mem,
+        &harness,
+        CApiHarness.recv,
+        CApiHarness.send,
+        CApiHarness.on_frame,
+        null,
+        &tx_nodes,
+        tx_nodes.len,
+        @backingInt(root.EndpointRole.server),
+        1024,
+        1024,
+    );
+    try testing.expect(conn_opt != null);
+    const conn = conn_opt.?;
+    harness.conn = conn;
+    harness.conn_mem = &conn_mem;
+    harness.tx_nodes = &tx_nodes;
+
+    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
+    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
+    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
+    try testing.expectEqual(@as(usize, 1), harness.chunk_count);
+    try testing.expectEqual(null, harness.reentrant_init);
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_tx_pending(conn, &pending));
+}
+
 fn fuzz_rx_bytes(_: void, smith: *testing.Smith) anyerror!void {
     var input_buf: [root.MaxFrameHeaderLen]u8 = undefined;
-    smith.bytes(&input_buf);
-    const input = input_buf[0..];
+    const input_len: usize = @intCast(smith.slice(&input_buf));
+    const input = input_buf[0..input_len];
 
     _ = root.decode_header(input) catch {};
 
@@ -993,12 +1562,21 @@ fn fuzz_rx_bytes(_: void, smith: *testing.Smith) anyerror!void {
     while (offset < input.len) {
         const dst = conn.get_header_buffer();
         const read_len = @min(dst.len, input.len - offset);
+        if (read_len == 0) return;
         @memcpy(dst[0..read_len], input[offset .. offset + read_len]);
         try conn.advance_header_read(read_len);
         offset += read_len;
 
         const action = conn.advance_rx() catch return;
-        if (action == .need_payload or action == .emit_frame) conn.complete_frame();
+        switch (action) {
+            .need_header => {},
+            .need_payload => {
+                conn.reset_rx();
+                return;
+            },
+            .emit_frame => try conn.complete_frame(),
+            _ => return,
+        }
     }
 }
 
@@ -1038,6 +1616,10 @@ test "Fuzz: deterministic receive stress" {
         const remaining = decoded.payload_len - conn.payload_bytes_processed;
         const step = random.intRangeAtMost(u64, 0, remaining);
         conn.advance_payload_read(step) catch continue;
-        conn.complete_frame();
+        if (step == remaining) {
+            try conn.complete_frame();
+        } else {
+            conn.reset_rx();
+        }
     }
 }

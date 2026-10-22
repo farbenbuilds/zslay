@@ -8,7 +8,7 @@ For the step-by-step release procedure, see [CONTRIBUTE.md](CONTRIBUTE.md); for 
 
 | Workflow                          | Trigger                                          | Purpose                                                                 |
 | --------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------- |
-| `.github/workflows/lint.yml`      | Pull request into `main` (Zig and build paths)   | Formatting check (`zig fmt --check .`) with Zig 0.16.0                  |
+| `.github/workflows/lint.yml`      | Pull request into `main` (Zig and build paths)   | Formatting check (`zig fmt --check .`) with Zig 0.17.0                  |
 | `.github/workflows/test.yml`      | Pull request into `main`, push to `main`         | Formatting gate, `nix flake check`, native and musl tests               |
 | `.github/workflows/benchmark.yml` | Pull request into `main`, nightly schedule, manual dispatch | Core and loopback echo benchmarks, PR artifacts, and `benchmark-data` history |
 | `.github/workflows/publish.yml`   | Push of a version tag matching `v*`              | Release verification, cross-platform build via Nix, GitHub release      |
@@ -18,7 +18,7 @@ For the step-by-step release procedure, see [CONTRIBUTE.md](CONTRIBUTE.md); for 
 Runs on every pull request into `main` that modifies `.zig`, `.zon`, or `build.zig` files:
 
 1. Checkout repository.
-2. Setup Zig 0.16.0 with `mlugg/setup-zig` (no Nix).
+2. Setup Zig 0.17.0 with `mlugg/setup-zig` (no Nix).
 3. Executes `zig fmt --check .` (strict formatting check; fails the PR if files are dirty).
 
 ## Test Pipeline (`test.yml`)
@@ -31,7 +31,7 @@ Tests the core parser logic, Data-Oriented Design (DOD) memory layouts, and stat
 - Commands:
   - `nix develop -c zig fmt --check .`
   - `nix flake check --print-build-logs`
-- Scope: `flake check` builds the native and musl `test` derivations, which run `zig build test`. That step executes all `test` blocks defined in `src/test.zig` and other Zig source files, and also compiles, links, and runs the C11 ABI smoke test `src/c_api_smoke.c`.
+- Scope: `flake check` builds the native and musl `test` derivations, which run `zig build test`. That step executes all `test` blocks defined in `src/test.zig` and other Zig source files in Debug and ReleaseSafe, and also compiles, links, and runs the C11 ABI smoke test `src/c_api_smoke.c`.
 - Pull-request path filter: Zig sources, flake files, workflows, `include/`, `build.zig`, and `**/*.c`.
 
 ## Benchmark Pipeline (`benchmark.yml`)
@@ -48,7 +48,7 @@ GitHub-hosted runner hardware and scheduling vary, so compare results within mat
 
 ## Release Pipeline (`publish.yml`)
 
-Triggered by pushing a semver tag such as `v0.2.0`. Releases are driven by tags, not by pushes to `main`.
+Triggered by pushing a semver tag such as `v0.3.0`. Releases are driven by tags, not by pushes to `main`.
 
 Because we use `flake.nix`, the `build` job runs on `ubuntu-latest` and compiles artifacts for all platforms natively, removing the need for expensive and slow macOS or Windows CI runners.
 
@@ -56,9 +56,9 @@ Because we use `flake.nix`, the `build` job runs on `ubuntu-latest` and compiles
 
 Runs first; `build` and `release` depend on it.
 
-1. Derives the version from the tag (`v0.2.0` becomes `0.2.0`).
+1. Derives the version from the tag (`v0.3.0` becomes `0.3.0`).
 2. Fails the workflow when the tag, the `build.zig.zon` version, and the matching `CHANGELOG.md` section disagree.
-3. Extracts the release notes from the matching `## [0.2.0]` section of `CHANGELOG.md` and uploads them as the `release-notes` artifact.
+3. Extracts the release notes from the matching `## [0.3.0]` section of `CHANGELOG.md` and uploads them as the `release-notes` artifact.
 
 ### Job: `build`
 

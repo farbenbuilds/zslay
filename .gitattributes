@@ -1,0 +1,11 @@
+# Keep vendored agent tooling out of GitHub language statistics.
+.agents/** linguist-vendored
+.codex/** linguist-vendored
+.opencode/** linguist-vendored
+
+# Generated benchmark and knowledge-graph output is not source.
+graphify-out/** linguist-generated
+
+# Documentation and Zig package metadata.
+*.md linguist-documentation
+*.zon linguist-language=Zig

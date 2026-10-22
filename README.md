@@ -4,21 +4,21 @@
 
 # zslay - Zero-allocation, I/O-agnostic WebSocket framing library
 
-`zslay` is a pure Zig (0.16.0) port of the C-based `wslay` library. It acts as a highly optimized, memory-safe, and I/O-agnostic core for parsing WebSocket (RFC 6455) frames.
+`zslay` is a pure Zig (0.17.0) port of the C-based `wslay` library. It acts as a highly optimized, memory-safe, and I/O-agnostic core for parsing WebSocket (RFC 6455) frames.
 
-## Why Zig 0.16.0?
+## Why Zig 0.17.0?
 
-Zig 0.16.0 brings a suite of powerful features perfectly suited for systems-level parsers:
+Zig 0.17.0 brings a suite of powerful features perfectly suited for systems-level parsers:
 - **Zero Hidden Control Flow:** Predictable performance with no hidden allocations or exceptions.
 - **Memory Safety:** Built-in spatial safety and compile-time checks catch bounds and alignment errors early.
 - **Fast Compilation & FFI:** Drop-in C ABI compatibility natively without overhead. It smoothly integrates with Node.js, Python, Rust, and others via C FFI.
-- **Modern standard library:** Embraces the modern `std.io` architecture while avoiding deprecated builtins, ensuring long-term stability.
+- **Modern standard library:** Embraces the modern `std.Io` architecture while avoiding deprecated builtins, ensuring long-term stability.
 
 ## Data-Oriented Design (DOD)
 
 This project strictly adheres to Data-Oriented Design principles to squeeze out maximum performance:
 - **Zero-Allocation:** No dynamic memory allocation during standard parser execution. `zslay` utilizes bounded ring buffers and pre-allocated static contexts instead of heap allocators.
-- **Cache-Efficient:** Eliminates pointer chasing. We use explicit, small integers (`u16`, `u32`) as indices for state tracking to maximize CPU L1/L2 cache locality.
+- **Cache-Efficient:** Eliminates pointer chasing. We use explicit integer indices for state tracking to maximize CPU L1/L2 cache locality.
 - **Flat Layouts:** Heavy usage of `packed struct` mapped directly to hardware/protocol byte boundaries (e.g., `FrameHeader`).
 
 ## Functional Core, Imperative Shell
@@ -66,7 +66,7 @@ cd zslay
 ```
 
 **2. Enter the hermetic Nix environment**
-*(Provides Zig 0.16.0 and all necessary tooling)*
+*(Provides Zig 0.17.0 and all necessary tooling)*
 ```bash
 nix develop
 ```
@@ -84,7 +84,7 @@ pre-commit install
 ```bash
 zig build test
 ```
-*This also compiles, links, and runs the C11 ABI smoke test (`src/c_api_smoke.c`) against the installed `zslay.h` and static library.*
+*This runs the Debug and ReleaseSafe suites and also compiles, links, and runs the C11 ABI smoke test (`src/c_api_smoke.c`) against the installed `zslay.h` and static library.*
 
 **5. Run the in-process benchmark**
 ```bash
@@ -120,15 +120,17 @@ zig fmt .
 
 ### C API
 
-Native Zig callers initialize `Conn` with a `ConnConfig` containing the endpoint role and frame/message limits. The static library installs `zslay.h`; C callers allocate connection and frame-node storage using the reported size and alignment, then provide the same mandatory configuration.
+Native Zig callers initialize `Conn` with a `ConnConfig` containing the endpoint role and frame/message limits. The static library installs `zslay.h`; C callers allocate connection and frame-node storage using the reported size and alignment, then provide the same mandatory configuration. Connection storage now includes a 4 KiB masked transmit scratch chunk, so always allocate from `zslay_conn_get_size()`.
 
 `zslay_conn_recv` performs one bounded unit of work and returns `ZSLAY_PROGRESS` when the caller should invoke it again. Payload callbacks are streaming chunks: use `payload_offset`, `frame_len`, and `end_of_frame` for boundaries; the WebSocket `fin` bit describes message fragmentation only.
 
-`zslay_conn_reset` abandons partial receive state, including an active fragmented message, without touching the transport. It returns `ZSLAY_ERR_INVALID_ARGUMENT` for a null or misaligned handle.
+`zslay_conn_send` also performs bounded work. It returns `ZSLAY_PROGRESS` when the callback budget expires with frames remaining and `ZSLAY_OK` when the queue drains or the transport would block. Use `zslay_conn_tx_pending` to decide when borrowed payload memory may be released.
 
-Client connections must provide a cryptographically secure mask callback that fills all four requested bytes and returns zero. Queued transmit payloads remain borrowed until sending completes, and receive chunk pointers expire when the callback returns.
+`zslay_conn_reset` abandons partial receive state, including an active fragmented message, without touching the transport. Only reset at a frame boundary or when the connection is being discarded; unconsumed bytes cannot be resynchronized. `zslay_conn_reset_tx` drops queued transmit frames and open fragments, and `zslay_conn_deinit` retires the handle. All three return `ZSLAY_ERR_INVALID_ARGUMENT` for a null, misaligned, or stale handle.
 
-Application-layer close validation is available to Zig callers through `validate_close_payload(payload)`: an empty payload is valid, a one-byte payload is rejected, the close code must be 1000-1003, 1007-1014, or 3000-4999, and the reason must be valid UTF-8.
+Client connections must provide a cryptographically secure mask callback that fills all four requested bytes and returns zero; initialization fails without one. Queued transmit payloads remain borrowed until `zslay_conn_tx_pending` returns zero, and receive chunk pointers expire when the callback returns. Callbacks must not re-enter `recv`, `send`, `reset`, `reset_tx`, `init`, or `deinit`; `on_frame` may call `prepare_frame` and `queue_frame` to enqueue a response.
+
+Close validation is available to both Zig and C callers through `validate_close_payload` and `zslay_validate_close_payload`: an empty payload is valid, a one-byte payload is rejected, the close code must be 1000-1003, 1007-1014, or 3000-4999, the reason must be valid UTF-8, and the payload must not exceed 125 bytes. Outbound close frames are validated before serialization.
 
 ## AI Agent Workflows
 

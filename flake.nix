@@ -22,19 +22,20 @@
         system,
         ...
       }: let
-        isLinux = pkgs.stdenv.isLinux;
+        isLinux = pkgs.stdenv.hostPlatform.isLinux;
         pkgsMusl =
           if isLinux
           then pkgs.pkgsMusl
           else null;
 
-        zig = inputs.zig-overlay.packages.${system}."0.16.0";
+        zig = inputs.zig-overlay.packages.${system}."0.17.0";
 
         mkDevShell = p:
           p.mkShell {
             packages = [
               zig
               pkgs.zls
+              pkgs.pre-commit
               pkgs.gnutar
               pkgs.bzip2
               pkgs.gzip

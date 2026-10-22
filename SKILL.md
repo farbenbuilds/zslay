@@ -1,6 +1,6 @@
 # Global SKILL.md
 
-This document summarizes the AI agent skills configured for the `zslay` project (version 0.2.1). `AGENT_DIRECTORY.md` is the source of truth for agent ownership and skill coverage.
+This document summarizes the AI agent skills configured for the `zslay` project (version 0.3.0). `AGENT_DIRECTORY.md` is the source of truth for agent ownership and skill coverage.
 
 ## Core Project Skills
 
@@ -11,7 +11,7 @@ This document summarizes the AI agent skills configured for the `zslay` project 
 
 ## Zig and Tooling Skills
 
-- **zig-0-17**: Zig 0.17.0 API guidance and porting notes for `@backingInt`/`@fromBackingInt`, `SafeAllocator`, Struct-of-Arrays reflection, and the build system split. The repository still pins Zig 0.16.0 in `flake.nix` and `build.zig.zon`, so apply this skill as migration guidance until the toolchain pin changes.
+- **zig-0-17**: Zig 0.17.0 API guidance and porting notes for `@backingInt`/`@fromBackingInt`, `SafeAllocator`, Struct-of-Arrays reflection, and the build system split. The repository pins Zig 0.17.0 in `flake.nix` and `build.zig.zon`; apply this skill directly.
 - **zig-best-practices**: Used when reading or writing Zig files (`.zig`, `build.zig`, `build.zig.zon`).
 - **zig-testing**: Test authoring, test allocators, filters, comptime tests, and fuzz testing.
 - **nix-best-practices**: Nix flakes, overlays, `shell.nix`, and `flake.nix` work.

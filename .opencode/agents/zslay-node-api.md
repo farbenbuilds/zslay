@@ -24,7 +24,7 @@ Load every skill below with the skill tool before editing:
 1. `zslay-c-ffi` - pointer-plus-length boundaries, opaque contexts, explicit widths.
 2. `nix-hermetic` - no global installs; add Node and npm through the Nix shell when the binding tooling lands.
 3. `nix-best-practices` - flake and dev-shell wiring for the addon.
-4. `zig-0-17` - 0.17.0 migration guidance; apply only after the repository upgrades from its pinned 0.16.0 toolchain.
+4. `zig-0-17` - 0.17.0 migration guidance; apply against the pinned 0.17.0 toolchain.
 5. `zig-best-practices` - explicit errors and C interop idioms.
 6. `context7` - fetch current Node-API and node-addon-api documentation before using an API.
 7. `install-anti-slop` - vendored Oxlint setup for JavaScript or TypeScript binding tooling; do not run its installer until `bindings/node/` and an Oxlint configuration exist.

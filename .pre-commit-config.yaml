@@ -3,7 +3,12 @@ repos:
     rev: f21b558333029617150c32006fb65b63f51fd7b0 # v0.3.0
     hooks:
       - id: zig-fmt
+        entry: nix develop -c zig fmt
+        language: system
       - id: zig-build-test
+        entry: nix develop -c zig build test
+        language: system
+        pass_filenames: false
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # v6.0.0
     hooks:

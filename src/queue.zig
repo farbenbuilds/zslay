@@ -20,7 +20,8 @@ pub fn Queue(comptime Element: type) type {
             if (self.len >= self.buffer.len) return error.QueueFull;
 
             self.buffer[self.tail] = item;
-            self.tail = (self.tail + 1) % self.buffer.len;
+            self.tail += 1;
+            if (self.tail == self.buffer.len) self.tail = 0;
             self.len += 1;
         }
 
@@ -38,7 +39,8 @@ pub fn Queue(comptime Element: type) type {
             if (self.len == 0) return null;
 
             const item = self.buffer[self.head];
-            self.head = (self.head + 1) % self.buffer.len;
+            self.head += 1;
+            if (self.head == self.buffer.len) self.head = 0;
             self.len -= 1;
             return item;
         }
@@ -51,6 +53,19 @@ pub fn Queue(comptime Element: type) type {
             const item = self.buffer[self.tail];
             self.len -= 1;
             return item;
+        }
+
+        // returns the head item without removing it
+        pub fn front(self: *Self) ?*Element {
+            if (self.len == 0) return null;
+            return &self.buffer[self.head];
+        }
+
+        // drops every queued item and restores empty indices
+        pub fn clear(self: *Self) void {
+            self.head = 0;
+            self.tail = 0;
+            self.len = 0;
         }
     };
 }

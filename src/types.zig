@@ -10,7 +10,10 @@ pub const Opcode = enum(u4) {
     _,
 
     pub inline fn is_control(self: Opcode) bool {
-        return @intFromEnum(self) >= @intFromEnum(Opcode.close);
+        return switch (self) {
+            .close, .ping, .pong => true,
+            else => false,
+        };
     }
 };
 

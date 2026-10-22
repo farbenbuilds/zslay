@@ -48,7 +48,7 @@ body:
     attributes:
       label: Environment & Toolchain
       description: Information about your Zig version, OS, Architecture, and integration method.
-      placeholder: E.g. Zig 0.16.0, NixOS x86_64, using the C static library via Deno FFI.
+      placeholder: E.g. Zig 0.17.0, NixOS x86_64, using the C static library via Deno FFI.
     validations:
       required: true
   - type: textarea

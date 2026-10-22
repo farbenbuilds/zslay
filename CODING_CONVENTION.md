@@ -1,6 +1,6 @@
 # zslay - Coding Conventions
 
-Code style standards for the `zslay` project using the Zig 0.16.0 toolchain.
+Code style standards for the `zslay` project using the Zig 0.17.0 toolchain.
 
 The `zslay` codebase strictly enforces the **Linux Kernel Coding Style** adapted for Zig. To maintain zero-allocation guarantees, C-ABI compatibility, and Linux Kernel-style C-portability, all pull requests must adhere to the rules below.
 
@@ -64,7 +64,7 @@ For architecture see [CODEBASE.md](CODEBASE.md); for setup, workflows, and relea
 ## 4. Memory and Allocations
 
 - **Zero-Allocation**: No hidden allocations. The parser must remain completely detached from memory allocators (`std.mem.Allocator`).
-- **I/O Agnostic**: The parser only operates on user-provided slices (`[]u8` or `[]const u8`). It reads and updates state, leaving actual I/O execution (such as using `std.Io` in Zig 0.16.0) and memory management entirely to the caller.
+- **I/O Agnostic**: The parser only operates on user-provided slices (`[]u8` or `[]const u8`). It reads and updates state, leaving actual I/O execution (such as using `std.Io` in Zig 0.17.0) and memory management entirely to the caller.
 - **Large Structures**: Pass large structures by constant pointer (`*const T`) to avoid unnecessary stack copying.
 
 ---
