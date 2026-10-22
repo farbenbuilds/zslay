@@ -159,6 +159,7 @@ fn clear_tx_chunk(zslay_conn: *ZslayConn) void {
 }
 
 fn clear_rx_stage(zslay_conn: *ZslayConn) void {
+    if (zslay_conn.rx_stage_len != 0) @memset(zslay_conn.rx_stage[0..zslay_conn.rx_stage_len], 0);
     zslay_conn.rx_stage_len = 0;
     zslay_conn.rx_stage_off = 0;
     zslay_conn.rx_chunk_start = 0;
