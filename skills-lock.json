@@ -13,6 +13,12 @@
       "skillPath": "skills/caveman/SKILL.md",
       "computedHash": "59e1fe0d3eeb4189ee5c467efde567672e5cacb41f157c477a6152ca907d44ea"
     },
+    "codebase-design": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/codebase-design/SKILL.md",
+      "computedHash": "b2888e4f4e8c0af3bfd557575a64b905c44e6248c3101d72077816882b3a92b9"
+    },
     "context7": {
       "source": "intellectronica/agent-skills",
       "sourceType": "github",
@@ -24,6 +30,36 @@
       "sourceType": "github",
       "skillPath": "dod/SKILL.md",
       "computedHash": "2746973a03ae09612ec1a5fe5f6160deac3de2beba11343e57fd442cd0e4a5bb"
+    },
+    "domain-modeling": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/domain-modeling/SKILL.md",
+      "computedHash": "b3eb40152b81f0c98fd2095a023c019452dbdce56f7540cc67fece2972db8369"
+    },
+    "grill-me": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/productivity/grill-me/SKILL.md",
+      "computedHash": "083c2d2d7b2b4688d92d669844dfcb317da0120057683cf00be47659da85e625"
+    },
+    "grilling": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/productivity/grilling/SKILL.md",
+      "computedHash": "f09fd571ad1a759e809b5a3e8327c95221635793b89df9e01c0caeea27f13244"
+    },
+    "improve-codebase-architecture": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/improve-codebase-architecture/SKILL.md",
+      "computedHash": "fb5133771cd38e153609a6ab58e34cf100d81fa6852197cfc5deaaa3a0bf2ab9"
+    },
+    "install-anti-slop": {
+      "source": "dmmulroy/anti-slop",
+      "sourceType": "github",
+      "skillPath": "skills/install-anti-slop/SKILL.md",
+      "computedHash": "cc20d2e0d7845d08b485a196cf94f12071fef61f375d80b3e1e9d9771c789c8a"
     },
     "nix-best-practices": {
       "source": "0xbigboss/claude-code",
@@ -37,11 +73,17 @@
       "skillPath": "skills/ponytail/SKILL.md",
       "computedHash": "210fa0831f649ce9f8a305f7b7c8cf2a0dd09ac4dd53067109941b96e7811d4e"
     },
-    "zig-0.16": {
+    "thermo-nuclear-code-quality-review": {
+      "source": "cursor/plugins",
+      "sourceType": "github",
+      "skillPath": "cursor-team-kit/skills/thermo-nuclear-code-quality-review/SKILL.md",
+      "computedHash": "9c42ee2eb72366736c00e5537fdff64f8ac1c0c57f92604d9c6557500c7778ca"
+    },
+    "zig-0-17": {
       "source": "zigcc/skills",
       "sourceType": "github",
-      "skillPath": "zig-0.16/SKILL.md",
-      "computedHash": "82a551c0121974da06daf2d4bb06f47c33dfd840c11f86d758688ed2177371dd"
+      "skillPath": "zig-0-17/SKILL.md",
+      "computedHash": "53a94a0d4bb1a57efc4569bdb950cd2a18a8d50996f4ae1acc70c34555f189a2"
     },
     "zig-best-practices": {
       "source": "0xbigboss/claude-code",

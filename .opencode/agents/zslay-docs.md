@@ -25,6 +25,8 @@ Load every skill below with the skill tool before editing:
 2. `caveman` - terse, token-efficient prose; cut filler without losing technical accuracy.
 3. `ponytail` - delete redundant sections instead of rewriting them; YAGNI for new docs.
 4. `context7` - verify external API or tool behavior before documenting it.
+5. `domain-modeling` - keep glossary and ADR terminology aligned when documenting domain concepts.
+6. `graphify` - query the repository knowledge graph before broad source reads.
 
 If a skill cannot be loaded, follow `CODEBASE.md` and `CODING_CONVENTION.md` instead and say so in the report.
 

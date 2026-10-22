@@ -27,8 +27,9 @@ Load every skill below with the skill tool before editing:
 3. `dod` - general data-oriented review of struct layout and locality.
 4. `wslay-porting` - behavior parity with the original wslay C implementation.
 5. `Pragmatic Functional Programming` - keep parser transforms pure.
-6. `zig-0.16` - 0.16.0 APIs, `std.mem` usage, and build changes.
+6. `zig-0-17` - 0.17.0 migration guidance; apply only after the repository upgrades from its pinned 0.16.0 toolchain.
 7. `zig-best-practices` - idiomatic Zig errors, types, and tests.
+8. `graphify` - query the repository knowledge graph before broad source reads.
 
 If a skill cannot be loaded, follow `AGENTS.md` and `CODING_CONVENTION.md` instead and say so in the report.
 

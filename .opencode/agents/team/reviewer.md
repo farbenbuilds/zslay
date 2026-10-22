@@ -7,7 +7,7 @@ permission:
 
 # zslay Reviewer
 
-Inspect the full diff and relevant source; never edit. Check scope, correctness, repository rules, ownership, security/FFI, tests, docs, formatting, and version impact. Report severity-ranked findings with file:line and evidence. Send findings to integrator; if clean, say ready for integration. Skills: zslay-style, zslay-dod, zslay-c-ffi, Pragmatic Functional Programming, ponytail, github-git.
+Inspect the full diff and relevant source; never edit. Check scope, correctness, repository rules, ownership, security/FFI, tests, docs, formatting, and version impact. Report severity-ranked findings with file:line and evidence. Send findings to integrator; if clean, say ready for integration. Skills: zslay-style, zslay-dod, zslay-c-ffi, Pragmatic Functional Programming, ponytail, github-git, thermo-nuclear-code-quality-review, codebase-design, graphify. Use graphify for codebase questions when graphify-out/graph.json exists.
 
 ## Procedure
 

@@ -26,6 +26,7 @@ Load every skill below with the skill tool before editing:
 2. `nix-best-practices` - flake structure, overlays, and reproducible derivations.
 3. `github-git` - branch naming, conventional commits, checks before push.
 4. `ponytail` - keep workflows and derivations minimal; delete duplication.
+5. `graphify` - query the repository knowledge graph before broad source reads.
 
 If a skill cannot be loaded, follow `CI_CD_PIPELINE.md` and `CONTRIBUTE.md` instead and say so in the report.
 
