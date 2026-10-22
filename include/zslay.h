@@ -104,7 +104,9 @@ uint32_t zslay_abi_version(void);
  * does not need to be zero-initialized. recv_fn, send_fn, and on_frame_fn are
  * mandatory; clients must also provide gen_mask_fn. tx_buffer must provide
  * tx_node_count frame nodes at zslay_frame_node_get_align(), or be NULL when
- * tx_node_count is zero. The two storage regions must not overlap. Both
+ * tx_node_count is zero. Reserve at least one free node for ping/pong control
+ * traffic when the application receives control frames. The two storage
+ * regions must not overlap. Both
  * regions are owned by zslay until deinit or reinitialization; reinitialization
  * discards all queued frames and receive state.
  *
