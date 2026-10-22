@@ -28,6 +28,7 @@ enum {
     MAX_CLIENTS = 128,
     MAX_MESSAGE = 4096,
     MAX_HANDSHAKE = 4096,
+    WS_INPUT_SIZE = 8192,
     ACCEPT_BUDGET = 16,
     POLL_TIMEOUT_MS = 1000,
     IDLE_TIMEOUT_SECONDS = 30,
@@ -49,9 +50,9 @@ struct client {
     void *conn;
     char handshake[MAX_HANDSHAKE];
     size_t handshake_len;
-    uint8_t prebuffer[MAX_HANDSHAKE];
-    size_t prebuffer_len;
-    size_t prebuffer_offset;
+    uint8_t ws_in[WS_INPUT_SIZE];
+    size_t ws_in_len;
+    size_t ws_in_off;
     time_t last_active;
     char response[256];
     size_t response_len;
@@ -214,27 +215,30 @@ static ptrdiff_t recv_frame(uint8_t *buf, size_t len, void *user_data)
 {
     struct client *client = user_data;
 
-    if (client->prebuffer_offset < client->prebuffer_len) {
-        size_t available = client->prebuffer_len - client->prebuffer_offset;
-        size_t count = len < available ? len : available;
-        memcpy(buf, client->prebuffer + client->prebuffer_offset, count);
-        client->prebuffer_offset += count;
-        return (ptrdiff_t)count;
+    if (client->ws_in_off == client->ws_in_len) {
+        client->ws_in_off = 0;
+        client->ws_in_len = 0;
+
+        ssize_t got = recv(client->fd, client->ws_in, sizeof(client->ws_in), 0);
+        if (got > 0) {
+            client->ws_in_len = (size_t)got;
+        } else if (got == 0) {
+            client->failed = 1;
+            return -1;
+        } else if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+            client->recv_blocked = 1;
+            return 0;
+        } else {
+            client->failed = 1;
+            return -1;
+        }
     }
 
-    ssize_t got = recv(client->fd, buf, len, 0);
-    if (got > 0)
-        return got;
-    if (got == 0) {
-        client->failed = 1;
-        return -1;
-    }
-    if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-        client->recv_blocked = 1;
-        return 0;
-    }
-    client->failed = 1;
-    return -1;
+    size_t available = client->ws_in_len - client->ws_in_off;
+    size_t count = len < available ? len : available;
+    memcpy(buf, client->ws_in + client->ws_in_off, count);
+    client->ws_in_off += count;
+    return (ptrdiff_t)count;
 }
 
 static ptrdiff_t send_frame(const uint8_t *buf, size_t len, void *user_data)
@@ -461,9 +465,9 @@ static void read_handshake(struct client *client)
 
             size_t leftover = client->handshake_len - header_len;
             if (leftover > 0) {
-                memcpy(client->prebuffer, client->handshake + header_len, leftover);
-                client->prebuffer_len = leftover;
-                client->prebuffer_offset = 0;
+                memcpy(client->ws_in, client->handshake + header_len, leftover);
+                client->ws_in_len = leftover;
+                client->ws_in_off = 0;
             }
             client->handshake_len = header_len;
             client->handshake[header_len] = 0;
@@ -495,46 +499,68 @@ static void write_handshake(struct client *client)
         return;
     }
     client->phase = PHASE_WEBSOCKET;
-    if (client->prebuffer_offset < client->prebuffer_len)
+    if (client->ws_in_off < client->ws_in_len)
         service_websocket(client);
 }
 
 static void service_websocket(struct client *client)
 {
-    int status;
-    size_t pending = 0;
-    if (client->pending) {
-        client->send_blocked = 0;
-        status = zslay_conn_send(client->conn);
-        if (client->failed || (status != ZSLAY_OK && status != ZSLAY_PROGRESS)) {
-            retire_client(client);
-            return;
+    for (int round = 0; round < MAX_HANDSHAKE; round++) {
+        size_t pending = 0;
+        if (client->pending) {
+            client->send_blocked = 0;
+            int status = zslay_conn_send(client->conn);
+            if (client->failed || (status != ZSLAY_OK && status != ZSLAY_PROGRESS)) {
+                retire_client(client);
+                return;
+            }
+            if (client->send_blocked)
+                return;
+            if (zslay_conn_tx_pending(client->conn, &pending) != ZSLAY_OK) {
+                retire_client(client);
+                return;
+            }
+            if (pending != 0)
+                return;
+            client->pending = 0;
+            if (client->pending_binary)
+                client->message_len = 0;
+            client->control_len = 0;
+            if (client->close_after_send) {
+                retire_client(client);
+                return;
+            }
         }
-        if (client->send_blocked)
-            return;
-        if (zslay_conn_tx_pending(client->conn, &pending) != ZSLAY_OK) {
-            retire_client(client);
-            return;
+
+        int progressed = 0;
+        for (int i = 0; i < 64; i++) {
+            client->recv_blocked = 0;
+            int status = zslay_conn_recv(client->conn);
+            if (status < 0 || client->failed) {
+                retire_client(client);
+                return;
+            }
+            if (status == ZSLAY_OK || client->recv_blocked)
+                return;
+            progressed = 1;
+            if (client->pending)
+                return;
         }
-        if (pending != 0)
+
+        if (!progressed || client->ws_in_off == client->ws_in_len)
             return;
-        client->pending = 0;
-        if (client->pending_binary)
-            client->message_len = 0;
-        client->control_len = 0;
-        if (client->close_after_send)
-            retire_client(client);
-        return;
     }
-    for (int i = 0; i < 64; i++) {
-        client->recv_blocked = 0;
-        status = zslay_conn_recv(client->conn);
-        if (status < 0 || client->failed) {
-            retire_client(client);
-            return;
-        }
-        if (client->pending || status == ZSLAY_OK || client->recv_blocked)
-            return;
+}
+
+static void free_client_storage(void)
+{
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        free(clients[i].conn_mem);
+        free(clients[i].node_mem);
+        free(clients[i].tx_mem);
+        clients[i].conn_mem = NULL;
+        clients[i].node_mem = NULL;
+        clients[i].tx_mem = NULL;
     }
 }
 
@@ -557,8 +583,10 @@ static int init_client_storage(void)
             posix_memalign(&clients[i].node_mem, node_align < sizeof(void *) ? sizeof(void *) : node_align,
                            node_size) != 0 ||
             posix_memalign(&clients[i].tx_mem, node_align < sizeof(void *) ? sizeof(void *) : node_align,
-                           node_size) != 0)
+                           node_size) != 0) {
+            free_client_storage();
             return -1;
+        }
     }
     return 0;
 }
@@ -590,8 +618,8 @@ static void accept_clients(int listen_fd)
         client->fd = fd;
         client->phase = PHASE_REQUEST;
         client->handshake_len = 0;
-        client->prebuffer_len = 0;
-        client->prebuffer_offset = 0;
+        client->ws_in_len = 0;
+        client->ws_in_off = 0;
         client->message_len = 0;
         client->control_len = 0;
         client->pending = 0;

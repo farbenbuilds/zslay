@@ -13,6 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `zslay_validate_close_payload` exposes close-code and UTF-8 reason validation to C consumers.
 - `Conn.get_tx_payload`, `Conn.get_tx_payload_offset`, `Conn.get_tx_masking_key`, and `Conn.advance_tx_payload` provide a checked transmit-payload API instead of direct queue access.
 - `Conn.is_at_frame_boundary`, `Conn.tx_pending`, `Conn.reset_tx`, `frame.header_bytes_needed`, and `frame.is_valid_close_code`.
+- C receive staging uses a 14-byte per-connection stage to coalesce the header and payload prefix, reducing transport reads without adding another large per-connection buffer.
+- Ping and pong frames preempt an unsent queue head, so control latency does not wait behind queued data frames.
 - `test-release-safe` coverage is part of `zig build test`; the release safety model is exercised on every run.
 - `.gitattributes` marks vendored agent tooling as non-source so GitHub reports Zig as the primary language.
 
@@ -28,7 +30,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Outgoing nodes with a null payload pointer and a nonzero length are rejected.
 - The C adapter detects callback reentrancy and returns `ZSLAY_ERR_REENTRANT`; `on_frame` may still enqueue a response.
 - `zslay_conn_init` rejects client connections without a mask generator, overlapping connection/transmit storage, oversized transmit counts, and invalid alignment.
-- C `send` caps unmasked chunks and masked work per call, so a fast peer or one-byte writes cannot monopolize the event loop.
+- C `send` caps callbacks, total bytes, masked chunks, and unmasked chunks per call, so a fast peer or one-byte writes cannot monopolize the event loop.
+- C `prepare_frame` and `queue_frame` reject node storage that overlaps the connection, an active queued slot, or the receive chunk, and reject payload storage that overlaps zslay-owned memory or the node.
+- `on_frame` receive chunks are rejected as queued payloads, preventing a transient stack pointer from becoming a borrowed transmit payload.
+- `zslay_conn_init` uses a thread-local callback-depth guard instead of reading possibly uninitialized handle memory and rejects reinitialization from any callback.
 
 ### Changed
 

@@ -235,7 +235,7 @@ pub const Conn = struct {
             if (node.header_sent < node.header_len) return TxAction.write_header;
             if (node.payload_sent < node.payload.len) return TxAction.write_payload;
 
-            _ = self.tx_queue.pop_front();
+            self.tx_queue.discard_front();
         }
 
         return null;
@@ -346,10 +346,22 @@ pub const Conn = struct {
         }
     }
 
-    // Validates wire order before appending an outgoing frame
+    fn control_can_preempt(self: *const Conn) bool {
+        const head = self.tx_queue.front_const() orelse return true;
+        return head.header_sent == 0 and head.payload_sent == 0;
+    }
+
+    // Validates wire order and appends; ping/pong preempt an unsent head
     pub fn queue_frame(self: *Conn, node: FrameNode) (types.Error || error{QueueFull})!void {
         const next_fragment = try self.validate_outgoing_node(node);
-        try self.tx_queue.push_back(node);
+
+        const op: types.Opcode = @fromBackingInt(@intCast(node.header_buf[0] & 0x0f));
+        if ((op == .ping or op == .pong) and self.control_can_preempt()) {
+            try self.tx_queue.push_front(node);
+        } else {
+            try self.tx_queue.push_back(node);
+        }
+
         self.tx_fragment = next_fragment;
     }
 

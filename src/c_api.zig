@@ -11,6 +11,8 @@ const ChunkBuffer = [MaxChunkSize]u8;
 
 // Keep one event-loop poll from monopolizing the caller
 const MaxSendCallbacksPerCall: usize = 64;
+const MaxSendBytesPerCall: usize = 256 * 1024;
+const MaxUnmaskedChunkSize: usize = 64 * 1024;
 
 // Opaque-handle identity and ABI revision
 const ConnMagic: u64 = 0x5a73_6c61_7943_6f6e;
@@ -76,10 +78,19 @@ const ZslayConn = struct {
     tx_chunk_len: usize = 0,
     tx_chunk_start: usize = 0,
     tx_chunk_sent: usize = 0,
+
+    rx_stage: types.FrameHeaderBuffer = undefined,
+    rx_stage_len: usize = 0,
+    rx_stage_off: usize = 0,
+    rx_chunk_start: usize = 0,
+    rx_chunk_len: usize = 0,
 };
 
 // Stable empty queue storage for receive-only connections
 var empty_tx_nodes: [0]event.FrameNode = .{};
+
+// Tracks any callback invocation so init cannot mutate a live handle
+threadlocal var callback_depth: u32 = 0;
 
 fn cast_opaque(comptime T: type, ptr: ?*anyopaque) ?*T {
     const raw = ptr orelse return null;
@@ -107,30 +118,110 @@ fn ranges_overlap(a_start: usize, a_len: usize, b_start: usize, b_len: usize) bo
 }
 
 fn frame_entry_allowed(zslay_conn: *const ZslayConn) bool {
-    return zslay_conn.callback_state == .none or zslay_conn.callback_state == .on_frame;
+    return callback_depth == 0 or zslay_conn.callback_state == .on_frame;
+}
+
+fn range_overlaps_conn_or_rx(zslay_conn: *const ZslayConn, start: usize, len: usize) bool {
+    if (len == 0) return false;
+    if (ranges_overlap(start, len, @intFromPtr(zslay_conn), @sizeOf(ZslayConn))) return true;
+    return zslay_conn.rx_chunk_len != 0 and
+        ranges_overlap(start, len, zslay_conn.rx_chunk_start, zslay_conn.rx_chunk_len);
+}
+
+fn range_overlaps_tx_ring(zslay_conn: *const ZslayConn, start: usize, len: usize) bool {
+    if (len == 0) return false;
+    const tx_buffer = zslay_conn.conn.tx_queue.buffer;
+    if (tx_buffer.len == 0) return false;
+
+    const tx_len = std.math.mul(usize, tx_buffer.len, @sizeOf(event.FrameNode)) catch return true;
+    return ranges_overlap(start, len, @intFromPtr(tx_buffer.ptr), tx_len);
+}
+
+fn tx_node_is_queued(zslay_conn: *const ZslayConn, start: usize, len: usize) bool {
+    const tx = &zslay_conn.conn.tx_queue;
+    if (tx.len == 0) return false;
+
+    var index = tx.head;
+    for (0..tx.len) |_| {
+        const slot_start = @intFromPtr(&tx.buffer[index]);
+        if (ranges_overlap(start, len, slot_start, @sizeOf(event.FrameNode))) return true;
+        index += 1;
+        if (index == tx.buffer.len) index = 0;
+    }
+    return false;
+}
+
+fn clear_tx_chunk(zslay_conn: *ZslayConn) void {
+    if (zslay_conn.tx_chunk_len != 0) @memset(zslay_conn.tx_chunk[0..zslay_conn.tx_chunk_len], 0);
+    zslay_conn.tx_chunk_len = 0;
+    zslay_conn.tx_chunk_start = 0;
+    zslay_conn.tx_chunk_sent = 0;
+}
+
+fn clear_rx_stage(zslay_conn: *ZslayConn) void {
+    zslay_conn.rx_stage_len = 0;
+    zslay_conn.rx_stage_off = 0;
+    zslay_conn.rx_chunk_start = 0;
+    zslay_conn.rx_chunk_len = 0;
 }
 
 fn call_recv(zslay_conn: *ZslayConn, buf: [*]u8, len: usize) isize {
+    callback_depth += 1;
+    defer callback_depth -= 1;
     zslay_conn.callback_state = .recv;
-    const read = zslay_conn.callbacks.recv_fn(buf, len, zslay_conn.callbacks.user_data);
-    zslay_conn.callback_state = .none;
-    return read;
+    defer zslay_conn.callback_state = .none;
+    return zslay_conn.callbacks.recv_fn(buf, len, zslay_conn.callbacks.user_data);
 }
 
 fn call_send(zslay_conn: *ZslayConn, buf: [*]const u8, len: usize) isize {
+    callback_depth += 1;
+    defer callback_depth -= 1;
     zslay_conn.callback_state = .send;
-    const sent = zslay_conn.callbacks.send_fn(buf, len, zslay_conn.callbacks.user_data);
-    zslay_conn.callback_state = .none;
-    return sent;
+    defer zslay_conn.callback_state = .none;
+    return zslay_conn.callbacks.send_fn(buf, len, zslay_conn.callbacks.user_data);
 }
 
 fn call_gen_mask(zslay_conn: *ZslayConn, buf: [*]u8, len: usize) c_int {
     const gen_mask_fn = zslay_conn.callbacks.gen_mask_fn orelse return -1;
+    callback_depth += 1;
+    defer callback_depth -= 1;
     const previous = zslay_conn.callback_state;
     zslay_conn.callback_state = .mask;
-    const result = gen_mask_fn(buf, len, zslay_conn.callbacks.user_data);
-    zslay_conn.callback_state = previous;
-    return result;
+    defer zslay_conn.callback_state = previous;
+    return gen_mask_fn(buf, len, zslay_conn.callbacks.user_data);
+}
+
+fn call_on_frame(
+    zslay_conn: *ZslayConn,
+    opcode: u8,
+    fin: u8,
+    payload: ?[*]const u8,
+    len: usize,
+    payload_offset: u64,
+    frame_len: u64,
+    end_of_frame: u8,
+) void {
+    callback_depth += 1;
+    defer callback_depth -= 1;
+    zslay_conn.rx_chunk_start = if (payload) |ptr| @intFromPtr(ptr) else 0;
+    zslay_conn.rx_chunk_len = len;
+    defer {
+        zslay_conn.rx_chunk_start = 0;
+        zslay_conn.rx_chunk_len = 0;
+    }
+
+    zslay_conn.callback_state = .on_frame;
+    defer zslay_conn.callback_state = .none;
+    zslay_conn.callbacks.on_frame_fn(
+        opcode,
+        fin,
+        payload,
+        len,
+        payload_offset,
+        frame_len,
+        end_of_frame,
+        zslay_conn.callbacks.user_data,
+    );
 }
 
 fn parse_opcode(raw: u8) ?types.Opcode {
@@ -204,10 +295,8 @@ pub export fn zslay_conn_init(
     max_frame_len: u64,
     max_message_len: u64,
 ) ?*anyopaque {
+    if (callback_depth != 0) return null;
     const zslay_conn = cast_opaque(ZslayConn, mem) orelse return null;
-    if (zslay_conn.magic == ConnMagic and
-        zslay_conn.abi_version == AbiVersion and
-        zslay_conn.callback_state != .none) return null;
 
     const recv = recv_fn orelse return null;
     const send = send_fn orelse return null;
@@ -253,13 +342,12 @@ pub export fn zslay_conn_init(
 // Invalidates a handle and releases no caller-owned storage
 pub export fn zslay_conn_deinit(conn_ptr: ?*anyopaque) c_int {
     const zslay_conn = as_conn(conn_ptr) orelse return ResultInvalidArgument;
-    if (zslay_conn.callback_state != .none) return ResultReentrant;
+    if (callback_depth != 0 or zslay_conn.callback_state != .none) return ResultReentrant;
 
     zslay_conn.conn.reset_rx();
     zslay_conn.conn.reset_tx();
-    zslay_conn.tx_chunk_len = 0;
-    zslay_conn.tx_chunk_start = 0;
-    zslay_conn.tx_chunk_sent = 0;
+    clear_tx_chunk(zslay_conn);
+    clear_rx_stage(zslay_conn);
     invalidate(zslay_conn);
     return ResultOk;
 }
@@ -267,101 +355,126 @@ pub export fn zslay_conn_deinit(conn_ptr: ?*anyopaque) c_int {
 // Performs at most one transport read and one frame callback per invocation
 pub export fn zslay_conn_recv(conn_ptr: ?*anyopaque) c_int {
     const zslay_conn = as_conn(conn_ptr) orelse return ResultInvalidArgument;
-    if (zslay_conn.callback_state != .none) return ResultReentrant;
+    if (callback_depth != 0 or zslay_conn.callback_state != .none) return ResultReentrant;
 
     const conn = &zslay_conn.conn;
-    const action = conn.advance_rx() catch return ResultProtocolError;
+    var action = conn.advance_rx() catch return ResultProtocolError;
+    var progressed = false;
 
-    switch (action) {
-        .need_header => {
-            const buf = conn.get_header_buffer();
-            if (buf.len == 0) return ResultProtocolError;
+    while (true) {
+        switch (action) {
+            .need_header => {
+                const buf = conn.get_header_buffer();
+                if (buf.len == 0) return ResultProtocolError;
 
-            const read = call_recv(zslay_conn, buf.ptr, buf.len);
-            if (read < 0) return ResultCallbackError;
-            if (read == 0) return ResultOk;
+                if (zslay_conn.rx_stage_off == zslay_conn.rx_stage_len) {
+                    const read = call_recv(zslay_conn, &zslay_conn.rx_stage, zslay_conn.rx_stage.len);
+                    if (read < 0) return ResultCallbackError;
+                    if (read == 0) return if (progressed) ResultProgress else ResultOk;
 
-            const read_len: usize = @intCast(read);
-            if (read_len > buf.len) return ResultCallbackError;
-            conn.advance_header_read(read_len) catch return ResultProtocolError;
-            return ResultProgress;
-        },
-        .need_payload => {
-            const decoded = conn.decoded_header orelse return ResultProtocolError;
-            if (conn.payload_bytes_processed > decoded.payload_len) return ResultProtocolError;
-            const remaining: u64 = decoded.payload_len - conn.payload_bytes_processed;
+                    const read_len: usize = @intCast(read);
+                    if (read_len > zslay_conn.rx_stage.len) return ResultCallbackError;
+                    zslay_conn.rx_stage_len = read_len;
+                    zslay_conn.rx_stage_off = 0;
+                }
 
-            var chunk_buf: ChunkBuffer = undefined;
-            const chunk_size: usize = @intCast(@min(chunk_buf.len, remaining));
-            const read = call_recv(zslay_conn, &chunk_buf, chunk_size);
-            if (read < 0) return ResultCallbackError;
-            if (read == 0) return ResultOk;
+                const staged = zslay_conn.rx_stage[zslay_conn.rx_stage_off..zslay_conn.rx_stage_len];
+                const copy_len = @min(buf.len, staged.len);
+                @memcpy(buf[0..copy_len], staged[0..copy_len]);
+                zslay_conn.rx_stage_off += copy_len;
+                conn.advance_header_read(copy_len) catch return ResultProtocolError;
+                progressed = true;
+                action = conn.advance_rx() catch return ResultProtocolError;
+            },
+            .need_payload => {
+                const decoded = conn.decoded_header orelse return ResultProtocolError;
+                if (conn.payload_bytes_processed > decoded.payload_len) return ResultProtocolError;
+                const remaining: u64 = decoded.payload_len - conn.payload_bytes_processed;
 
-            const read_len: usize = @intCast(read);
-            if (read_len > chunk_size) return ResultCallbackError;
+                var chunk_buf: ChunkBuffer = undefined;
+                const chunk_size: usize = @intCast(@min(chunk_buf.len, remaining));
+                var chunk_len: usize = 0;
 
-            const payload_offset = conn.payload_bytes_processed;
-            const read_len_u64: u64 = @intCast(read_len);
-            const end_of_frame = read_len_u64 == remaining;
+                if (zslay_conn.rx_stage_off < zslay_conn.rx_stage_len) {
+                    const staged = zslay_conn.rx_stage[zslay_conn.rx_stage_off..zslay_conn.rx_stage_len];
+                    chunk_len = @min(chunk_size, staged.len);
+                    @memcpy(chunk_buf[0..chunk_len], staged[0..chunk_len]);
+                    zslay_conn.rx_stage_off += chunk_len;
+                }
 
-            if (decoded.header.mask) {
-                const key = decoded.masking_key orelse return ResultProtocolError;
-                frame.mask(chunk_buf[0..read_len], key, payload_offset);
-            }
+                if (chunk_len < chunk_size) {
+                    const read = call_recv(zslay_conn, chunk_buf[chunk_len..].ptr, chunk_size - chunk_len);
+                    if (read < 0) return ResultCallbackError;
+                    if (read == 0) {
+                        if (chunk_len == 0) return if (progressed) ResultProgress else ResultOk;
+                    } else {
+                        const read_len: usize = @intCast(read);
+                        if (read_len > chunk_size - chunk_len) return ResultCallbackError;
+                        chunk_len += read_len;
+                    }
+                }
 
-            zslay_conn.callback_state = .on_frame;
-            zslay_conn.callbacks.on_frame_fn(
-                @intCast(decoded.header.opcode),
-                if (decoded.header.fin) 1 else 0,
-                chunk_buf[0..read_len].ptr,
-                read_len,
-                payload_offset,
-                decoded.payload_len,
-                if (end_of_frame) 1 else 0,
-                zslay_conn.callbacks.user_data,
-            );
-            zslay_conn.callback_state = .none;
+                if (chunk_len == 0) return if (progressed) ResultProgress else ResultOk;
 
-            conn.advance_payload_read(read_len_u64) catch return ResultProtocolError;
-            if (end_of_frame) conn.complete_frame() catch return ResultProtocolError;
-            return ResultProgress;
-        },
-        .emit_frame => {
-            const decoded = conn.decoded_header orelse return ResultProtocolError;
-            zslay_conn.callback_state = .on_frame;
-            zslay_conn.callbacks.on_frame_fn(
-                @intCast(decoded.header.opcode),
-                if (decoded.header.fin) 1 else 0,
-                null,
-                0,
-                0,
-                0,
-                1,
-                zslay_conn.callbacks.user_data,
-            );
-            zslay_conn.callback_state = .none;
+                const payload_offset = conn.payload_bytes_processed;
+                const read_len_u64: u64 = @intCast(chunk_len);
+                const end_of_frame = read_len_u64 == remaining;
 
-            conn.complete_frame() catch return ResultProtocolError;
-            return ResultProgress;
-        },
-        _ => return ResultProtocolError,
+                if (decoded.header.mask) {
+                    const key = decoded.masking_key orelse return ResultProtocolError;
+                    frame.mask(chunk_buf[0..chunk_len], key, payload_offset);
+                }
+
+                call_on_frame(
+                    zslay_conn,
+                    @intCast(decoded.header.opcode),
+                    if (decoded.header.fin) 1 else 0,
+                    chunk_buf[0..chunk_len].ptr,
+                    chunk_len,
+                    payload_offset,
+                    decoded.payload_len,
+                    if (end_of_frame) 1 else 0,
+                );
+
+                conn.advance_payload_read(read_len_u64) catch return ResultProtocolError;
+                if (end_of_frame) conn.complete_frame() catch return ResultProtocolError;
+                return ResultProgress;
+            },
+            .emit_frame => {
+                const decoded = conn.decoded_header orelse return ResultProtocolError;
+                call_on_frame(
+                    zslay_conn,
+                    @intCast(decoded.header.opcode),
+                    if (decoded.header.fin) 1 else 0,
+                    null,
+                    0,
+                    0,
+                    0,
+                    1,
+                );
+
+                conn.complete_frame() catch return ResultProtocolError;
+                return ResultProgress;
+            },
+            _ => return ResultProtocolError,
+        }
     }
 }
 
 // Flushes queued frames with bounded work and resumable masked chunks
 pub export fn zslay_conn_send(conn_ptr: ?*anyopaque) c_int {
     const zslay_conn = as_conn(conn_ptr) orelse return ResultInvalidArgument;
-    if (zslay_conn.callback_state != .none) return ResultReentrant;
+    if (callback_depth != 0 or zslay_conn.callback_state != .none) return ResultReentrant;
 
     const conn = &zslay_conn.conn;
     var callbacks: usize = 0;
+    var bytes_sent: usize = 0;
 
     while (true) {
-        if (callbacks >= MaxSendCallbacksPerCall) {
+        const action = conn.advance_tx() orelse return ResultOk;
+        if (callbacks >= MaxSendCallbacksPerCall or bytes_sent >= MaxSendBytesPerCall) {
             return if (conn.tx_pending() != 0) ResultProgress else ResultOk;
         }
-
-        const action = conn.advance_tx() orelse return ResultOk;
 
         switch (action) {
             .write_header => {
@@ -375,6 +488,7 @@ pub export fn zslay_conn_send(conn_ptr: ?*anyopaque) c_int {
                 const sent_len: usize = @intCast(sent);
                 if (sent_len > buf.len) return ResultCallbackError;
                 conn.advance_tx_header(sent_len) catch return ResultProtocolError;
+                bytes_sent += sent_len;
                 callbacks += 1;
             },
             .write_payload => {
@@ -408,6 +522,7 @@ pub export fn zslay_conn_send(conn_ptr: ?*anyopaque) c_int {
 
                     zslay_conn.tx_chunk_sent += sent_len;
                     conn.advance_tx_payload(sent_len) catch return ResultProtocolError;
+                    bytes_sent += sent_len;
 
                     if (zslay_conn.tx_chunk_sent == zslay_conn.tx_chunk_len) {
                         zslay_conn.tx_chunk_len = 0;
@@ -416,7 +531,8 @@ pub export fn zslay_conn_send(conn_ptr: ?*anyopaque) c_int {
                     }
                 } else {
                     const remaining = conn.get_tx_payload() catch return ResultProtocolError;
-                    const chunk_len = @min(remaining.len, MaxChunkSize);
+                    const budget = MaxSendBytesPerCall - bytes_sent;
+                    const chunk_len = @min(remaining.len, @min(MaxUnmaskedChunkSize, budget));
                     if (chunk_len == 0) return ResultProtocolError;
 
                     const sent = call_send(zslay_conn, remaining.ptr, chunk_len);
@@ -426,6 +542,7 @@ pub export fn zslay_conn_send(conn_ptr: ?*anyopaque) c_int {
                     const sent_len: usize = @intCast(sent);
                     if (sent_len > chunk_len) return ResultCallbackError;
                     conn.advance_tx_payload(sent_len) catch return ResultProtocolError;
+                    bytes_sent += sent_len;
                 }
 
                 callbacks += 1;
@@ -438,21 +555,20 @@ pub export fn zslay_conn_send(conn_ptr: ?*anyopaque) c_int {
 // Abandons receive state, including any active fragmented message
 pub export fn zslay_conn_reset(conn_ptr: ?*anyopaque) c_int {
     const zslay_conn = as_conn(conn_ptr) orelse return ResultInvalidArgument;
-    if (zslay_conn.callback_state != .none) return ResultReentrant;
+    if (callback_depth != 0 or zslay_conn.callback_state != .none) return ResultReentrant;
 
     zslay_conn.conn.reset_rx();
+    clear_rx_stage(zslay_conn);
     return ResultOk;
 }
 
 // Drops queued transmit frames and any open transmit fragment
 pub export fn zslay_conn_reset_tx(conn_ptr: ?*anyopaque) c_int {
     const zslay_conn = as_conn(conn_ptr) orelse return ResultInvalidArgument;
-    if (zslay_conn.callback_state != .none) return ResultReentrant;
+    if (callback_depth != 0 or zslay_conn.callback_state != .none) return ResultReentrant;
 
     zslay_conn.conn.reset_tx();
-    zslay_conn.tx_chunk_len = 0;
-    zslay_conn.tx_chunk_start = 0;
-    zslay_conn.tx_chunk_sent = 0;
+    clear_tx_chunk(zslay_conn);
     return ResultOk;
 }
 
@@ -479,12 +595,11 @@ pub export fn zslay_conn_prepare_frame(
     if (!frame_entry_allowed(zslay_conn)) return ResultReentrant;
 
     const node = cast_opaque(event.FrameNode, node_ptr) orelse return ResultInvalidArgument;
-    if (ranges_overlap(
-        @intFromPtr(node),
-        @sizeOf(event.FrameNode),
-        @intFromPtr(zslay_conn),
-        @sizeOf(ZslayConn),
-    )) return ResultInvalidArgument;
+    const node_start = @intFromPtr(node);
+    const node_len = @sizeOf(event.FrameNode);
+    if (range_overlaps_conn_or_rx(zslay_conn, node_start, node_len) or
+        tx_node_is_queued(zslay_conn, node_start, node_len))
+        return ResultInvalidArgument;
 
     if (fin > 1 or is_masked > 1) return ResultInvalidArgument;
 
@@ -495,6 +610,14 @@ pub export fn zslay_conn_prepare_frame(
         const payload_ptr = payload orelse return ResultInvalidArgument;
         break :blk payload_ptr[0..payload_len];
     };
+
+    if (payload_slice.len != 0) {
+        const payload_start = @intFromPtr(payload_slice.ptr);
+        if (range_overlaps_conn_or_rx(zslay_conn, payload_start, payload_slice.len) or
+            range_overlaps_tx_ring(zslay_conn, payload_start, payload_slice.len) or
+            ranges_overlap(payload_start, payload_slice.len, node_start, node_len))
+            return ResultInvalidArgument;
+    }
 
     const masked = is_masked == 1;
     zslay_conn.conn.validate_outgoing_frame(fin == 1, op, @intCast(payload_slice.len), masked) catch |err| {
@@ -533,14 +656,20 @@ pub export fn zslay_conn_queue_frame(
     if (!frame_entry_allowed(zslay_conn)) return ResultReentrant;
 
     const node = cast_opaque(event.FrameNode, node_ptr) orelse return ResultInvalidArgument;
-    if (ranges_overlap(
-        @intFromPtr(node),
-        @sizeOf(event.FrameNode),
-        @intFromPtr(zslay_conn),
-        @sizeOf(ZslayConn),
-    )) return ResultInvalidArgument;
+    const node_start = @intFromPtr(node);
+    const node_len = @sizeOf(event.FrameNode);
+    if (range_overlaps_conn_or_rx(zslay_conn, node_start, node_len) or
+        tx_node_is_queued(zslay_conn, node_start, node_len))
+        return ResultInvalidArgument;
 
-    if (node.payload.len != 0 and @intFromPtr(node.payload.ptr) == 0) return ResultInvalidArgument;
+    if (node.payload.len != 0) {
+        const payload_start = @intFromPtr(node.payload.ptr);
+        if (payload_start == 0) return ResultInvalidArgument;
+        if (range_overlaps_conn_or_rx(zslay_conn, payload_start, node.payload.len) or
+            range_overlaps_tx_ring(zslay_conn, payload_start, node.payload.len) or
+            ranges_overlap(payload_start, node.payload.len, node_start, node_len))
+            return ResultInvalidArgument;
+    }
 
     zslay_conn.conn.queue_frame(node.*) catch |err| return switch (err) {
         error.QueueFull => ResultQueueFull,

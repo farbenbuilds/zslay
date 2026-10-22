@@ -21,12 +21,12 @@ Types are plain, top-level declarations with explicit names. Repeated or inline 
 | `src/types.zig` | Defines RFC 6455 opcodes, close codes, parser errors, packed frame headers, and the named size aliases `MaskingKeyLen`, `MaskingKey`, `MaxFrameHeaderLen`, and `FrameHeaderBuffer`. |
 | `src/frame.zig` | Pure functions that encode and decode frame headers, resolve canonical lengths into `DecodedHeader`, calculate serialized sizes, derive header byte counts, mask payloads in place, and validate close payloads. |
 | `src/queue.zig` | Implements a generic bounded deque `Queue(Element)` over caller-provided storage; it performs no allocation. |
-| `src/event.zig` | Holds the iterative receive/transmit state machine, `ConnConfig`, `FrameNode`, `FragmentState`, the concrete `FrameQueue` alias, and checked TX header/payload accessors. |
-| `src/c_api.zig` | Exports the role-aware, bounded C ABI, validates opaque handles, guards callback reentrancy, and bridges caller-owned connection storage, a masked TX scratch chunk, and callbacks to the Zig state machine. |
+| `src/event.zig` | Holds the iterative receive/transmit state machine, `ConnConfig`, `FrameNode`, `FragmentState`, the concrete `FrameQueue` alias, checked TX header/payload accessors, and ping/pong preemption for an unsent queue head. |
+| `src/c_api.zig` | Exports the role-aware, bounded C ABI, validates opaque handles, guards callback reentrancy, stages receive headers, enforces callback/byte send budgets and payload-overlap rules, and bridges caller-owned storage to the Zig state machine. |
 | `src/root.zig` | Defines the public Zig module and re-exports the supported API. |
 | `src/test.zig` | Tests layouts, queues, frame encoding/decoding, masking, TX accessors, malformed-input resilience, C ABI handles, partial sends, and reentrancy. |
 | `src/bench.zig` | Standalone, in-process benchmark for header operations, payload masking, and receive state transitions; prints JSON via `zig build bench -Doptimize=ReleaseFast` and is excluded from the unit test suite. |
-| `benchmarks/echo_server.c` | Loopback WebSocket echo adapter that drives the public C ABI from socket callbacks; built by `zig build bench-echo`. |
+| `benchmarks/echo_server.c` | Loopback WebSocket echo adapter with chunked handshakes, pipelined-input draining, an 8 KiB receive buffer, idle retirement, and separate node/transmit storage; built by `zig build bench-echo`. |
 | `src/c_api_smoke.c` | C11 ABI smoke test compiled and linked against the installed `zslay.h` and static library; executed by `zig build test`. |
 
 ## Build and Environment

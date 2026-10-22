@@ -61,6 +61,21 @@ pub fn Queue(comptime Element: type) type {
             return &self.buffer[self.head];
         }
 
+        // returns the head item through a read-only view
+        pub fn front_const(self: *const Self) ?*const Element {
+            if (self.len == 0) return null;
+            return &self.buffer[self.head];
+        }
+
+        // advances past the head item without copying it
+        pub fn discard_front(self: *Self) void {
+            if (self.len == 0) return;
+
+            self.head += 1;
+            if (self.head == self.buffer.len) self.head = 0;
+            self.len -= 1;
+        }
+
         // drops every queued item and restores empty indices
         pub fn clear(self: *Self) void {
             self.head = 0;

@@ -51,14 +51,20 @@ const CApiHarness = struct {
     sent: [8192]u8 = @splat(0),
     sent_len: usize = 0,
     send_limit: usize = 0,
+    discard_sent: bool = false,
 
     conn: ?*anyopaque = null,
     conn_mem: ?*anyopaque = null,
     tx_nodes: ?*anyopaque = null,
     reenter: bool = false,
     reenter_init: bool = false,
+    try_queue_chunk: bool = false,
     reentrant_result: c_int = 0,
     reentrant_init: ?*anyopaque = null,
+    queued_chunk_result: c_int = 0,
+    reply_node: root.FrameNode = .{},
+    recv_calls: usize = 0,
+    send_calls: usize = 0,
 
     mask_result: c_int = 0,
     mask_key: root.MaskingKey = .{ 1, 2, 3, 4 },
@@ -69,6 +75,7 @@ const CApiHarness = struct {
 
     fn recv(buf: [*]u8, len: usize, user_data: ?*anyopaque) callconv(.c) isize {
         const self = from_user_data(user_data);
+        self.recv_calls += 1;
         if (self.over_report) return @intCast(len + 1);
 
         const available = self.input.len - self.input_offset;
@@ -82,9 +89,11 @@ const CApiHarness = struct {
 
     fn send(buf: [*]const u8, len: usize, user_data: ?*anyopaque) callconv(.c) isize {
         const self = from_user_data(user_data);
+        self.send_calls += 1;
         if (self.over_report_send) return @intCast(len + 1);
 
         const write_len = if (self.send_limit == 0) len else @min(len, self.send_limit);
+        if (self.discard_sent) return @intCast(write_len);
         if (self.sent_len + write_len > self.sent.len) return -1;
 
         @memcpy(self.sent[self.sent_len .. self.sent_len + write_len], buf[0..write_len]);
@@ -116,6 +125,17 @@ const CApiHarness = struct {
             self.received_len += len;
         }
 
+        if (self.try_queue_chunk and len != 0) {
+            self.queued_chunk_result = c_api.zslay_conn_prepare_frame(
+                self.conn,
+                &self.reply_node,
+                1,
+                @backingInt(root.Opcode.binary),
+                payload,
+                len,
+                0,
+            );
+        }
         if (self.reenter) {
             self.reentrant_result = c_api.zslay_conn_recv(self.conn);
         }
@@ -814,14 +834,11 @@ test "C API: stream chunks with explicit frame completion" {
     const conn = conn_opt.?;
 
     try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
-    try testing.expectEqual(0, harness.chunk_count);
-    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
-    try testing.expectEqual(0, harness.chunk_count);
-    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
     try testing.expectEqual(1, harness.chunk_count);
     try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
-
     try testing.expectEqual(2, harness.chunk_count);
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_recv(conn));
+
     try testing.expectEqual(4096, harness.chunk_lens[0]);
     try testing.expectEqual(payload_len - 4096, harness.chunk_lens[1]);
     try testing.expectEqual(0, harness.chunk_offsets[0]);
@@ -885,16 +902,17 @@ test "C API: bound empty frame delivery to one frame per call" {
     const conn = conn_opt.?;
 
     try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
-    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
-    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
     try testing.expectEqual(1, harness.chunk_count);
-    try testing.expectEqual(6, harness.input_offset);
+    try testing.expectEqual(12, harness.input_offset);
+    try testing.expectEqual(@as(usize, 1), harness.recv_calls);
     try testing.expectEqual(0, harness.chunk_lens[0]);
     try testing.expectEqual(1, harness.chunk_ends[0]);
 
     try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
-    try testing.expectEqual(1, harness.chunk_count);
-    try testing.expectEqual(8, harness.input_offset);
+    try testing.expectEqual(2, harness.chunk_count);
+    try testing.expectEqual(12, harness.input_offset);
+    try testing.expectEqual(@as(usize, 1), harness.recv_calls);
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_recv(conn));
 }
 
 test "C API: reject send callback over-reporting" {
@@ -1010,8 +1028,6 @@ test "C API: reset abandons receive state" {
     const conn = conn_opt.?;
 
     try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
-    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
-    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
     try testing.expectEqual(1, harness.chunk_count);
     try testing.expectEqual(0, harness.chunk_fins[0]);
     try testing.expectEqual(0, harness.received_len);
@@ -1019,14 +1035,16 @@ test "C API: reset abandons receive state" {
     try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_reset(conn));
     try testing.expectEqual(c_api.ResultInvalidArgument, c_api.zslay_conn_reset(null));
 
-    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
-    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
+    const second_wire = [_]u8{ 0x81, 0x82, 1, 2, 3, 4, 'y' ^ 1, 'o' ^ 2 };
+    harness.input = &second_wire;
+    harness.input_offset = 0;
+
     try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
     try testing.expectEqual(2, harness.chunk_count);
     try testing.expectEqual(2, harness.chunk_lens[1]);
     try testing.expectEqual(1, harness.chunk_fins[1]);
     try testing.expectEqual(1, harness.chunk_ends[1]);
-    try testing.expectEqualSlices(u8, "hi", harness.received[0..harness.received_len]);
+    try testing.expectEqualSlices(u8, "yo", harness.received[0..harness.received_len]);
 
     try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_recv(conn));
     try testing.expectEqual(2, harness.chunk_count);
@@ -1473,10 +1491,9 @@ test "C API: reentrant receive is rejected" {
     harness.conn = conn;
 
     try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
-    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
-    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
     try testing.expectEqual(@as(usize, 1), harness.chunk_count);
     try testing.expectEqual(c_api.ResultReentrant, harness.reentrant_result);
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_recv(conn));
 }
 
 test "C API: reset recovers after a protocol error" {
@@ -1502,16 +1519,14 @@ test "C API: reset recovers after a protocol error" {
     try testing.expect(conn_opt != null);
     const conn = conn_opt.?;
 
-    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
     try testing.expectEqual(c_api.ResultProtocolError, c_api.zslay_conn_recv(conn));
     try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_reset(conn));
 
     harness.input = &valid_wire;
     harness.input_offset = 0;
     try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
-    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
-    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
     try testing.expectEqual(@as(usize, 1), harness.chunk_count);
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_recv(conn));
 }
 
 test "C API: reentrant init is rejected" {
@@ -1541,11 +1556,236 @@ test "C API: reentrant init is rejected" {
     harness.tx_nodes = &tx_nodes;
 
     try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
-    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
-    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
     try testing.expectEqual(@as(usize, 1), harness.chunk_count);
     try testing.expectEqual(null, harness.reentrant_init);
     try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_tx_pending(conn, &pending));
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_recv(conn));
+}
+
+test "C API: receive staging coalesces header and payload" {
+    const payload_len = 128;
+    const key = root.MaskingKey{ 0x11, 0x22, 0x33, 0x44 };
+    const header = root.FrameHeader{
+        .opcode = @backingInt(root.Opcode.binary),
+        .rsv3 = false,
+        .rsv2 = false,
+        .rsv1 = false,
+        .fin = true,
+        .payload_len = 126,
+        .mask = true,
+    };
+
+    var wire: [payload_len + 8]u8 = undefined;
+    const header_len = try root.encode_header(&wire, header, payload_len, key);
+    for (wire[header_len..], 0..) |*byte, index| byte.* = @truncate(index);
+    root.mask(wire[header_len..], key, 0);
+
+    var harness = CApiHarness{ .input = &wire };
+    var conn_mem: [8192]u8 align(64) = undefined;
+    var tx_nodes: [1]root.FrameNode = undefined;
+
+    const conn_opt = c_api.zslay_conn_init(
+        &conn_mem,
+        &harness,
+        CApiHarness.recv,
+        CApiHarness.send,
+        CApiHarness.on_frame,
+        null,
+        &tx_nodes,
+        tx_nodes.len,
+        @backingInt(root.EndpointRole.server),
+        payload_len,
+        payload_len,
+    );
+    try testing.expect(conn_opt != null);
+    const conn = conn_opt.?;
+
+    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
+    try testing.expectEqual(@as(usize, 1), harness.chunk_count);
+    try testing.expectEqual(@as(usize, 2), harness.recv_calls);
+    try testing.expectEqual(@as(usize, payload_len), harness.received_len);
+    try testing.expectEqual(@as(usize, 0), harness.chunk_offsets[0]);
+    try testing.expectEqual(@as(u64, payload_len), harness.chunk_totals[0]);
+    try testing.expectEqual(@as(u8, 1), harness.chunk_ends[0]);
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_recv(conn));
+
+    for (harness.received[0..harness.received_len], 0..) |byte, index| {
+        try testing.expectEqual(@as(u8, @truncate(index)), byte);
+    }
+}
+
+test "C API: on_frame payload cannot be queued" {
+    const wire = [_]u8{
+        0x81,    0x85,    1,       2,       3,       4,
+        'h' ^ 1, 'e' ^ 2, 'l' ^ 3, 'l' ^ 4, 'o' ^ 1,
+    };
+    var harness = CApiHarness{ .input = &wire, .try_queue_chunk = true };
+    var conn_mem: [8192]u8 align(64) = undefined;
+    var tx_nodes: [1]root.FrameNode = undefined;
+
+    const conn_opt = c_api.zslay_conn_init(
+        &conn_mem,
+        &harness,
+        CApiHarness.recv,
+        CApiHarness.send,
+        CApiHarness.on_frame,
+        null,
+        &tx_nodes,
+        tx_nodes.len,
+        @backingInt(root.EndpointRole.server),
+        1024,
+        1024,
+    );
+    try testing.expect(conn_opt != null);
+    const conn = conn_opt.?;
+    harness.conn = conn;
+
+    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
+    try testing.expectEqual(@as(usize, 1), harness.chunk_count);
+    try testing.expectEqual(c_api.ResultInvalidArgument, harness.queued_chunk_result);
+    try testing.expectEqualSlices(u8, "hello", harness.received[0..harness.received_len]);
+}
+
+test "C API: send budget reports progress" {
+    var harness = CApiHarness{};
+    var conn_mem: [8192]u8 align(64) = undefined;
+    var tx_nodes: [100]root.FrameNode = undefined;
+    var node: root.FrameNode = undefined;
+    var pending: usize = 0;
+
+    const conn_opt = c_api.zslay_conn_init(
+        &conn_mem,
+        &harness,
+        CApiHarness.recv,
+        CApiHarness.send,
+        CApiHarness.on_frame,
+        null,
+        &tx_nodes,
+        tx_nodes.len,
+        @backingInt(root.EndpointRole.server),
+        1024,
+        1024,
+    );
+    try testing.expect(conn_opt != null);
+    const conn = conn_opt.?;
+
+    for (0..tx_nodes.len) |_| {
+        try testing.expectEqual(
+            c_api.ResultOk,
+            c_api.zslay_conn_prepare_frame(conn, &node, 1, @backingInt(root.Opcode.text), null, 0, 0),
+        );
+        try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_queue_frame(conn, &node));
+    }
+
+    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_send(conn));
+    try testing.expectEqual(@as(usize, 64), harness.send_calls);
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_tx_pending(conn, &pending));
+    try testing.expect(pending != 0);
+
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_send(conn));
+    try testing.expectEqual(@as(usize, 100), harness.send_calls);
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_tx_pending(conn, &pending));
+    try testing.expectEqual(@as(usize, 0), pending);
+}
+
+test "Connection: ping preempts an unsent data frame" {
+    var nodes: [4]root.FrameNode = undefined;
+    var conn = try init_conn(&nodes, .server, 1024, 1024);
+
+    const data = try conn.prepare_frame(true, .binary, "data", false, null);
+    try conn.queue_frame(data);
+    const ping = try conn.prepare_frame(true, .ping, "", false, null);
+    try conn.queue_frame(ping);
+
+    try testing.expectEqual(@as(usize, 2), conn.tx_pending());
+    const head = &conn.tx_queue.buffer[conn.tx_queue.head];
+    try testing.expectEqual(@as(u8, 0x89), head.header_buf[0]);
+
+    try conn.advance_tx_header(head.header_len);
+    try testing.expectEqual(root.TxAction.write_header, conn.advance_tx().?);
+    const next = &conn.tx_queue.buffer[conn.tx_queue.head];
+    try testing.expectEqual(@as(u8, 0x82), next.header_buf[0]);
+}
+
+test "Connection: ping does not preempt a partially sent head" {
+    var nodes: [4]root.FrameNode = undefined;
+    var conn = try init_conn(&nodes, .server, 1024, 1024);
+
+    const data = try conn.prepare_frame(true, .binary, "data", false, null);
+    try conn.queue_frame(data);
+    try conn.advance_tx_header(1);
+
+    const ping = try conn.prepare_frame(true, .ping, "", false, null);
+    try conn.queue_frame(ping);
+
+    try testing.expectEqual(@as(usize, 2), conn.tx_pending());
+    const head = &conn.tx_queue.buffer[conn.tx_queue.head];
+    try testing.expectEqual(@as(u8, 0x82), head.header_buf[0]);
+    try testing.expectEqual(@as(usize, 1), head.header_sent);
+}
+
+test "Connection: ping priority preserves fragment state" {
+    var nodes: [8]root.FrameNode = undefined;
+    var conn = try init_conn(&nodes, .server, 1024, 1024);
+
+    const start = try conn.prepare_frame(false, .text, "ab", false, null);
+    try conn.queue_frame(start);
+    try testing.expectEqual(root.Opcode.text, conn.tx_fragment.opcode.?);
+    try testing.expectEqual(@as(u64, 2), conn.tx_fragment.message_len);
+
+    const ping = try conn.prepare_frame(true, .ping, "", false, null);
+    try conn.queue_frame(ping);
+    try testing.expectEqual(root.Opcode.text, conn.tx_fragment.opcode.?);
+    try testing.expectEqual(@as(u64, 2), conn.tx_fragment.message_len);
+    const head = &conn.tx_queue.buffer[conn.tx_queue.head];
+    try testing.expectEqual(@as(u8, 0x89), head.header_buf[0]);
+
+    const finish = try conn.prepare_frame(true, .continuation, "cd", false, null);
+    try conn.queue_frame(finish);
+    try testing.expectEqual(null, conn.tx_fragment.opcode);
+    try testing.expectEqual(@as(usize, 3), conn.tx_pending());
+}
+
+test "C API: send byte budget bounds large unmasked frames" {
+    const payload_len = 300_000;
+    var payload: [payload_len]u8 = @splat(0x5a);
+    var harness = CApiHarness{ .discard_sent = true };
+    var conn_mem: [8192]u8 align(64) = undefined;
+    var tx_nodes: [1]root.FrameNode = undefined;
+    var node: root.FrameNode = undefined;
+    var pending: usize = 1;
+
+    const conn_opt = c_api.zslay_conn_init(
+        &conn_mem,
+        &harness,
+        CApiHarness.recv,
+        CApiHarness.send,
+        CApiHarness.on_frame,
+        null,
+        &tx_nodes,
+        tx_nodes.len,
+        @backingInt(root.EndpointRole.server),
+        payload_len,
+        payload_len,
+    );
+    try testing.expect(conn_opt != null);
+    const conn = conn_opt.?;
+
+    try testing.expectEqual(
+        c_api.ResultOk,
+        c_api.zslay_conn_prepare_frame(conn, &node, 1, @backingInt(root.Opcode.binary), &payload, payload.len, 0),
+    );
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_queue_frame(conn, &node));
+
+    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_send(conn));
+    try testing.expectEqual(@as(usize, 5), harness.send_calls);
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_tx_pending(conn, &pending));
+    try testing.expectEqual(@as(usize, 1), pending);
+
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_send(conn));
+    try testing.expectEqual(@as(usize, 6), harness.send_calls);
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_tx_pending(conn, &pending));
+    try testing.expectEqual(@as(usize, 0), pending);
 }
 
 fn fuzz_rx_bytes(_: void, smith: *testing.Smith) anyerror!void {
