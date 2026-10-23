@@ -4,97 +4,97 @@
     {
       "bytes_per_op": 8,
       "name": "header_encode_masked",
-      "ns_per_op": 1.508,
-      "ops_per_sec": 663226730.69,
+      "ns_per_op": 0.683,
+      "ops_per_sec": 1463635964.463,
       "sample_durations_ns": [
-        150778,
-        150808,
-        150862,
-        300589,
-        150258,
-        150168,
-        150194
+        68413,
+        68313,
+        69735,
+        68283,
+        68323,
+        68313,
+        68343
       ],
       "samples_ns_per_op": [
-        1.508,
-        1.508,
-        1.509,
-        3.006,
-        1.503,
-        1.502,
-        1.502
+        0.684,
+        0.683,
+        0.697,
+        0.683,
+        0.683,
+        0.683,
+        0.683
       ]
     },
     {
       "bytes_per_op": 8,
       "name": "header_decode_masked",
-      "ns_per_op": 1.435,
-      "ops_per_sec": 696985537.55,
+      "ns_per_op": 0.912,
+      "ops_per_sec": 1096647548.444,
       "sample_durations_ns": [
-        143475,
-        154673,
-        146902,
-        143426,
-        143429,
-        143425,
-        143727
+        91158,
+        102414,
+        91197,
+        91167,
+        91178,
+        91197,
+        91187
       ],
       "samples_ns_per_op": [
-        1.435,
-        1.547,
-        1.469,
-        1.434,
-        1.434,
-        1.434,
-        1.437
+        0.912,
+        1.024,
+        0.912,
+        0.912,
+        0.912,
+        0.912,
+        0.912
       ]
     },
     {
       "bytes_per_op": 1024,
       "name": "payload_mask_1024b",
-      "ns_per_op": 34.387,
-      "ops_per_sec": 29081010.972,
+      "ns_per_op": 15.416,
+      "ops_per_sec": 64866365.557,
       "sample_durations_ns": [
-        3466879,
-        3439565,
-        3438670,
-        3411472,
-        3415124,
-        3429099,
-        3439441
+        1543414,
+        1679098,
+        1531676,
+        1530013,
+        1538186,
+        1541631,
+        1541861
       ],
       "samples_ns_per_op": [
-        34.669,
-        34.396,
-        34.387,
-        34.115,
-        34.151,
-        34.291,
-        34.394
+        15.434,
+        16.791,
+        15.317,
+        15.3,
+        15.382,
+        15.416,
+        15.419
       ]
     },
     {
       "bytes_per_op": 136,
       "name": "conn_rx_state_128b",
-      "ns_per_op": 15.256,
-      "ops_per_sec": 65546348.478,
+      "ns_per_op": 8.054,
+      "ops_per_sec": 124158361.507,
       "sample_durations_ns": [
-        1515931,
-        1525638,
-        1516833,
-        1551246,
-        1487856,
-        1547893,
-        1556389
+        797811,
+        805423,
+        818823,
+        792903,
+        818452,
+        811091,
+        803159
       ],
       "samples_ns_per_op": [
-        15.159,
-        15.256,
-        15.168,
-        15.512,
-        14.879,
-        15.479,
-        15.564
+        7.978,
+        8.054,
+        8.188,
+        7.929,
+        8.185,
+        8.111,
+        8.032
       ]
     }
   ],
@@ -103,24 +103,24 @@
     "event": "schedule",
     "repository": "farbenbuilds/zslay",
     "run_attempt": "1",
-    "run_id": "39748757985"
+    "run_id": "39925153817"
   },
   "iterations_per_sample": 100000,
-  "record_id": "39748757985-1-2af3b092c186",
-  "recorded_at": "2026-10-22T08:36:34Z",
+  "record_id": "39925153817-1-eb3f7e2bae38",
+  "recorded_at": "2026-10-23T08:33:33Z",
   "repetitions": 7,
   "runner": {
-    "cpu": "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
+    "cpu": "AMD EPYC 9V45 96-Core Processor",
     "image": "ubuntu24",
     "kernel": "6.17.0-1022-azure",
     "machine": "x86_64"
   },
   "schema_version": 1,
-  "source_sha": "2af3b092c18655fc206b95689b859cea376b3de6",
+  "source_sha": "eb3f7e2bae382feab1ffbfd7f4bd8619578d2ff0",
   "toolchain": {
-    "flake_lock_sha256": "62f28d3306eceb81cece05ce73c89bc4f99d8cec4d20e9458f254a58a767a5b4",
+    "flake_lock_sha256": "572287d7bf78eddebef3b31c999f7a91d09c5eb85d0f20699081fcc02352d2ba",
     "optimize": "ReleaseFast",
-    "zig": "0.16.0"
+    "zig": "0.17.0"
   },
   "warmup_operations": 10000
 }
