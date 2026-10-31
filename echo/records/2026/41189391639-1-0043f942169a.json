@@ -1,0 +1,238 @@
+{
+  "benchmark": "zslay-echo",
+  "cases": [
+    {
+      "benchmark": "zslay-echo",
+      "connections": 1,
+      "duration_seconds": 5.0,
+      "errors": 0,
+      "name": "echo_1c_128b",
+      "ops_per_sec": 9065.204731691154,
+      "payload_bytes": 128,
+      "repetitions": 3,
+      "rtt_ns": {
+        "p50": 98273,
+        "p95": 152052,
+        "p99": 170146
+      },
+      "samples": [
+        {
+          "duration_seconds": 5.000291311000012,
+          "errors": 0,
+          "operations": 44269,
+          "ops_per_sec": 8853.28418818595,
+          "rtt_ns": {
+            "p50": 127146,
+            "p95": 168092,
+            "p99": 198699
+          }
+        },
+        {
+          "duration_seconds": 5.000218013999984,
+          "errors": 0,
+          "operations": 45328,
+          "ops_per_sec": 9065.204731691154,
+          "rtt_ns": {
+            "p50": 98032,
+            "p95": 149648,
+            "p99": 170146
+          }
+        },
+        {
+          "duration_seconds": 5.000284614999998,
+          "errors": 0,
+          "operations": 45465,
+          "ops_per_sec": 9092.48242862272,
+          "rtt_ns": {
+            "p50": 98273,
+            "p95": 152052,
+            "p99": 169595
+          }
+        }
+      ],
+      "schema_version": 1,
+      "warmup_seconds": 1.0
+    },
+    {
+      "benchmark": "zslay-echo",
+      "connections": 1,
+      "duration_seconds": 5.0,
+      "errors": 0,
+      "name": "echo_1c_1024b",
+      "ops_per_sec": 5763.985479446814,
+      "payload_bytes": 1024,
+      "repetitions": 3,
+      "rtt_ns": {
+        "p50": 165708,
+        "p95": 228094,
+        "p99": 257779
+      },
+      "samples": [
+        {
+          "duration_seconds": 5.000186087000003,
+          "errors": 0,
+          "operations": 28821,
+          "ops_per_sec": 5763.985479446814,
+          "rtt_ns": {
+            "p50": 169164,
+            "p95": 230338,
+            "p99": 257779
+          }
+        },
+        {
+          "duration_seconds": 5.000286830999983,
+          "errors": 0,
+          "operations": 27218,
+          "ops_per_sec": 5443.287739266911,
+          "rtt_ns": {
+            "p50": 165708,
+            "p95": 228094,
+            "p99": 259493
+          }
+        },
+        {
+          "duration_seconds": 5.000280751999981,
+          "errors": 0,
+          "operations": 29129,
+          "ops_per_sec": 5825.472897366646,
+          "rtt_ns": {
+            "p50": 161229,
+            "p95": 211773,
+            "p99": 238563
+          }
+        }
+      ],
+      "schema_version": 1,
+      "warmup_seconds": 1.0
+    },
+    {
+      "benchmark": "zslay-echo",
+      "connections": 64,
+      "duration_seconds": 5.0,
+      "errors": 0,
+      "name": "echo_64c_128b",
+      "ops_per_sec": 14790.20494704078,
+      "payload_bytes": 128,
+      "repetitions": 3,
+      "rtt_ns": {
+        "p50": 4266426,
+        "p95": 4442617,
+        "p99": 4675927
+      },
+      "samples": [
+        {
+          "duration_seconds": 5.002382262999987,
+          "errors": 0,
+          "operations": 74770,
+          "ops_per_sec": 14946.878520866887,
+          "rtt_ns": {
+            "p50": 4266967,
+            "p95": 4465607,
+            "p99": 4675927
+          }
+        },
+        {
+          "duration_seconds": 5.002975136999993,
+          "errors": 0,
+          "operations": 73408,
+          "ops_per_sec": 14672.869240765149,
+          "rtt_ns": {
+            "p50": 4266426,
+            "p95": 4416936,
+            "p99": 4903561
+          }
+        },
+        {
+          "duration_seconds": 5.00222953399998,
+          "errors": 0,
+          "operations": 73984,
+          "ops_per_sec": 14790.20494704078,
+          "rtt_ns": {
+            "p50": 4264046,
+            "p95": 4442617,
+            "p99": 4514430
+          }
+        }
+      ],
+      "schema_version": 1,
+      "warmup_seconds": 1.0
+    },
+    {
+      "benchmark": "zslay-echo",
+      "connections": 64,
+      "duration_seconds": 5.0,
+      "errors": 0,
+      "name": "echo_64c_1024b",
+      "ops_per_sec": 6592.753441776305,
+      "payload_bytes": 1024,
+      "repetitions": 3,
+      "rtt_ns": {
+        "p50": 9165827,
+        "p95": 12206302,
+        "p99": 12259862
+      },
+      "samples": [
+        {
+          "duration_seconds": 5.0026567870000065,
+          "errors": 0,
+          "operations": 34014,
+          "ops_per_sec": 6799.187201566454,
+          "rtt_ns": {
+            "p50": 8932945,
+            "p95": 9131783,
+            "p99": 9251424
+          }
+        },
+        {
+          "duration_seconds": 5.002629410999987,
+          "errors": 0,
+          "operations": 32840,
+          "ops_per_sec": 6564.547821149826,
+          "rtt_ns": {
+            "p50": 9165827,
+            "p95": 12287357,
+            "p99": 13038792
+          }
+        },
+        {
+          "duration_seconds": 5.003068943999978,
+          "errors": 0,
+          "operations": 32984,
+          "ops_per_sec": 6592.753441776305,
+          "rtt_ns": {
+            "p50": 11952420,
+            "p95": 12206302,
+            "p99": 12259862
+          }
+        }
+      ],
+      "schema_version": 1,
+      "warmup_seconds": 1.0
+    }
+  ],
+  "contract_sha256": "0d9d35373fdc3a4a064ed27b72538ac2b3c4c90b3bfefc3a3015991821d0326e",
+  "duration_seconds": 5.0,
+  "github": {
+    "event": "schedule",
+    "repository": "farbenbuilds/zslay",
+    "run_attempt": "1",
+    "run_id": "41189391639"
+  },
+  "record_id": "41189391639-1-0043f942169a",
+  "recorded_at": "2026-10-31T09:40:26Z",
+  "repetitions": 3,
+  "runner": {
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "image": "ubuntu24",
+    "kernel": "7.0.0-1017-azure",
+    "machine": "x86_64"
+  },
+  "schema_version": 1,
+  "source_sha": "0043f942169a863fda397d293c88eeb33f0837de",
+  "toolchain": {
+    "flake_lock_sha256": "572287d7bf78eddebef3b31c999f7a91d09c5eb85d0f20699081fcc02352d2ba",
+    "optimize": "ReleaseFast",
+    "zig": "0.17.0"
+  },
+  "warmup_seconds": 1.0
+}
