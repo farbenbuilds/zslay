@@ -2,6 +2,12 @@
   "benchmark": "zslay-core",
   "records": [
     {
+      "record_id": "42470788038-1-0043f942169a",
+      "record_path": "records/2026/42470788038-1-0043f942169a.json",
+      "recorded_at": "2026-11-08T10:20:24Z",
+      "source_sha": "0043f942169a863fda397d293c88eeb33f0837de"
+    },
+    {
       "record_id": "42362307220-1-0043f942169a",
       "record_path": "records/2026/42362307220-1-0043f942169a.json",
       "recorded_at": "2026-11-07T10:07:02Z",
