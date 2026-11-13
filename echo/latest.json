@@ -7,46 +7,46 @@
       "duration_seconds": 5.0,
       "errors": 0,
       "name": "echo_1c_128b",
-      "ops_per_sec": 9175.646388939453,
+      "ops_per_sec": 9232.515963492897,
       "payload_bytes": 128,
       "repetitions": 3,
       "rtt_ns": {
-        "p50": 93786,
-        "p95": 143598,
-        "p99": 163054
+        "p50": 94486,
+        "p95": 146172,
+        "p99": 169195
       },
       "samples": [
         {
-          "duration_seconds": 5.000277300999983,
+          "duration_seconds": 5.000235714000013,
           "errors": 0,
-          "operations": 42538,
-          "ops_per_sec": 8507.128192969021,
+          "operations": 47186,
+          "ops_per_sec": 9436.755124940471,
           "rtt_ns": {
-            "p50": 94527,
-            "p95": 147195,
-            "p99": 165940
+            "p50": 93384,
+            "p95": 146172,
+            "p99": 169195
           }
         },
         {
-          "duration_seconds": 5.000192690000006,
+          "duration_seconds": 5.0001538239999945,
           "errors": 0,
-          "operations": 45880,
-          "ops_per_sec": 9175.646388939453,
+          "operations": 46164,
+          "ops_per_sec": 9232.515963492897,
           "rtt_ns": {
-            "p50": 93786,
-            "p95": 143598,
-            "p99": 163054
+            "p50": 94486,
+            "p95": 144700,
+            "p99": 169055
           }
         },
         {
-          "duration_seconds": 5.000142290000042,
+          "duration_seconds": 5.000204642,
           "errors": 0,
-          "operations": 49679,
-          "ops_per_sec": 9935.517255049872,
+          "operations": 45758,
+          "ops_per_sec": 9151.225454984089,
           "rtt_ns": {
-            "p50": 93004,
-            "p95": 135383,
-            "p99": 155700
+            "p50": 99004,
+            "p95": 158916,
+            "p99": 173122
           }
         }
       ],
@@ -59,46 +59,46 @@
       "duration_seconds": 5.0,
       "errors": 0,
       "name": "echo_1c_1024b",
-      "ops_per_sec": 6003.023260189738,
+      "ops_per_sec": 6175.957402217287,
       "payload_bytes": 1024,
       "repetitions": 3,
       "rtt_ns": {
-        "p50": 156732,
-        "p95": 215032,
-        "p99": 234989
+        "p50": 149138,
+        "p95": 196807,
+        "p99": 216533
       },
       "samples": [
         {
-          "duration_seconds": 5.0001948839999955,
+          "duration_seconds": 5.0001742050000075,
           "errors": 0,
-          "operations": 30213,
-          "ops_per_sec": 6042.36448796783,
+          "operations": 30282,
+          "ops_per_sec": 6056.18899631917,
           "rtt_ns": {
-            "p50": 172341,
-            "p95": 217487,
-            "p99": 241071
+            "p50": 149138,
+            "p95": 196807,
+            "p99": 216533
           }
         },
         {
-          "duration_seconds": 5.000147209000033,
+          "duration_seconds": 5.000258527999961,
           "errors": 0,
-          "operations": 30016,
-          "ops_per_sec": 6003.023260189738,
+          "operations": 31201,
+          "ops_per_sec": 6239.877363397048,
           "rtt_ns": {
-            "p50": 156732,
-            "p95": 215032,
-            "p99": 234989
+            "p50": 150179,
+            "p95": 204100,
+            "p99": 227694
           }
         },
         {
-          "duration_seconds": 5.000247180000031,
+          "duration_seconds": 5.000196404999997,
           "errors": 0,
-          "operations": 29724,
-          "ops_per_sec": 5944.50612739505,
+          "operations": 30881,
+          "ops_per_sec": 6175.957402217287,
           "rtt_ns": {
-            "p50": 154999,
-            "p95": 211575,
-            "p99": 229910
+            "p50": 149018,
+            "p95": 189904,
+            "p99": 208789
           }
         }
       ],
@@ -111,46 +111,46 @@
       "duration_seconds": 5.0,
       "errors": 0,
       "name": "echo_64c_128b",
-      "ops_per_sec": 15864.968103554638,
+      "ops_per_sec": 15676.033555380642,
       "payload_bytes": 128,
       "repetitions": 3,
       "rtt_ns": {
-        "p50": 4010832,
-        "p95": 4108774,
-        "p99": 4171461
+        "p50": 4068310,
+        "p95": 4197952,
+        "p99": 4305283
       },
       "samples": [
         {
-          "duration_seconds": 5.002216170999986,
+          "duration_seconds": 5.003384798000013,
           "errors": 0,
-          "operations": 79360,
-          "ops_per_sec": 15864.968103554638,
+          "operations": 78013,
+          "ops_per_sec": 15592.044815578423,
           "rtt_ns": {
-            "p50": 4025698,
-            "p95": 4108774,
-            "p99": 4171461
+            "p50": 4086506,
+            "p95": 4216528,
+            "p99": 4305283
           }
         },
         {
-          "duration_seconds": 5.003347130000009,
+          "duration_seconds": 5.001839254999993,
           "errors": 0,
-          "operations": 79230,
-          "ops_per_sec": 15835.399371940011,
+          "operations": 78409,
+          "ops_per_sec": 15676.033555380642,
           "rtt_ns": {
-            "p50": 3983872,
-            "p95": 4068169,
-            "p99": 4149612
+            "p50": 4008529,
+            "p95": 4197952,
+            "p99": 5522537
           }
         },
         {
-          "duration_seconds": 5.002656585000011,
+          "duration_seconds": 5.00264052,
           "errors": 0,
-          "operations": 79616,
-          "ops_per_sec": 15914.744225842123,
+          "operations": 78656,
+          "ops_per_sec": 15722.896675374148,
           "rtt_ns": {
-            "p50": 4010832,
-            "p95": 4119785,
-            "p99": 4193423
+            "p50": 4068310,
+            "p95": 4167625,
+            "p99": 4242365
           }
         }
       ],
@@ -163,46 +163,46 @@
       "duration_seconds": 5.0,
       "errors": 0,
       "name": "echo_64c_1024b",
-      "ops_per_sec": 7357.086396617014,
+      "ops_per_sec": 7616.639588897811,
       "payload_bytes": 1024,
       "repetitions": 3,
       "rtt_ns": {
-        "p50": 8158172,
-        "p95": 11227951,
-        "p99": 11310786
+        "p50": 7921631,
+        "p95": 11161430,
+        "p99": 15314538
       },
       "samples": [
         {
-          "duration_seconds": 5.002731795999978,
+          "duration_seconds": 5.001590754999995,
           "errors": 0,
-          "operations": 37485,
-          "ops_per_sec": 7492.906181772885,
+          "operations": 38272,
+          "ops_per_sec": 7651.965519518008,
           "rtt_ns": {
-            "p50": 8301135,
-            "p95": 11286962,
-            "p99": 11359728
+            "p50": 7967486,
+            "p95": 12518365,
+            "p99": 15314538
           }
         },
         {
-          "duration_seconds": 5.001776081000003,
+          "duration_seconds": 5.001943384000015,
           "errors": 0,
-          "operations": 35909,
-          "ops_per_sec": 7179.249814162159,
+          "operations": 38098,
+          "ops_per_sec": 7616.639588897811,
           "rtt_ns": {
-            "p50": 8158172,
-            "p95": 11227951,
-            "p99": 11310786
+            "p50": 7921631,
+            "p95": 11161430,
+            "p99": 15569422
           }
         },
         {
-          "duration_seconds": 5.001980134000007,
+          "duration_seconds": 5.002494762000026,
           "errors": 0,
-          "operations": 36800,
-          "ops_per_sec": 7357.086396617014,
+          "operations": 37676,
+          "ops_per_sec": 7531.44216885435,
           "rtt_ns": {
-            "p50": 8060094,
-            "p95": 11172471,
-            "p99": 11243123
+            "p50": 7876797,
+            "p95": 11058529,
+            "p99": 11126445
           }
         }
       ],
@@ -216,10 +216,10 @@
     "event": "schedule",
     "repository": "farbenbuilds/zslay",
     "run_attempt": "1",
-    "run_id": "43205595086"
+    "run_id": "43412925664"
   },
-  "record_id": "43205595086-1-0043f942169a",
-  "recorded_at": "2026-11-12T11:06:12Z",
+  "record_id": "43412925664-1-0043f942169a",
+  "recorded_at": "2026-11-13T10:59:39Z",
   "repetitions": 3,
   "runner": {
     "cpu": "AMD EPYC 7763 64-Core Processor",
