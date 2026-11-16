@@ -12,24 +12,24 @@ Core code must remain zero-allocation and I/O-agnostic. Use caller-provided buff
 
 ## Sub-Agent Directory
 
-`.opencode/agents/` and `.codex/agents/` provide matching specialized agents for parser, event-loop, C ABI, Node-API, tests, review, release, and docs work. Both also provide an `architect` → `developer` → `reviewer` → `integrator` team procedure. Read `AGENT_DIRECTORY.md` for the roster, ownership map, workflow, and skill coverage. Each agent follows its listed skills and repository checks. Keep one owner per pull request scope and hand cross-scope work to the owning specialist. Claude Code loads `CLAUDE.md`, which imports this file; treat both files as one rule set.
+`.opencode/agents/`, `.codex/agents/`, and `.agents/agents/` provide matching specialized agents for parser, event-loop, C ABI, Node-API, tests, review, release, and docs work. All three provide an `architect` → `developer` → `reviewer` → `integrator` team procedure; agy names the roles `zslay-architect`, `zslay-developer`, `zslay-reviewer`, and `zslay-integrator`. Read `AGENT_DIRECTORY.md` for the roster, ownership map, workflow, and skill coverage. Each agent follows its listed skills and repository checks. Keep one owner per pull request scope and hand cross-scope work to the owning specialist. Claude Code loads `CLAUDE.md`, which imports this file; treat both files as one rule set.
 
 ## Optional Herdr Orchestration
 
-[Herdr](https://herdr.dev) is an optional terminal workspace for running multiple coding agents side by side. Use it only when it is installed, `HERDR_ENV=1` is set, and the contributor has started a Herdr session. If the check fails, ignore this section and execute tasks directly through the repository sub-agents. Herdr supplies panes; it does not replace the ownership rules in `AGENT_DIRECTORY.md`.
+[Herdr](https://herdr.dev) is an optional terminal workspace for running multiple coding agents side by side. Use it only when the user explicitly asks to use Herdr, `herdr` is installed, and `HERDR_ENV=1` is set in an active Herdr session. If Herdr was requested but the environment check fails, report the problem and stop; do not silently switch to another orchestration mode. If Herdr was not requested, ignore this section and execute tasks directly through the repository sub-agents. Herdr supplies panes; it does not replace the ownership rules in `AGENT_DIRECTORY.md`.
 
-Any agent kind supported by `herdr agent start --help` (for example `opencode`, `claude`, `codex`, or `agy`) can act as the orchestrator or a worker. Project roles still come from `.opencode/agents/` and `.codex/agents/`.
+Any agent kind supported by `herdr agent start --help` (for example `opencode`, `claude`, `codex`, or `agy`) can act as the orchestrator or a worker. OpenCode and Codex workers load their project roles from `.opencode/agents/` and `.codex/agents/`; agy workers load `.agents/agents/`; other kinds must be given the role, scope, and rules in the prompt.
 
 ### Roles and loop prevention
 
-- The orchestrator owns the plan, pane layout, task prompts, integration, and final verification.
-- If an orchestrator prompted this pane, you are a worker: execute the assigned task and do not delegate further.
+- The orchestrator owns the plan, pane layout, task prompts, and final coordination. Reviewer and integrator stages remain as defined in `AGENT_DIRECTORY.md`.
+- Leaf workers execute the assigned task and do not delegate further. Coordinator roles may hand off within the architect → developer → reviewer → integrator procedure; never spawn an unrequested second layer of workers.
 - Keep one owner per pull request scope. Never assign two workers to edit the same file concurrently.
 - Workers follow this file and `AGENT_DIRECTORY.md`, including the rule that no agent commits, pushes, tags, or opens a pull request unless the user explicitly asked.
 
 ### Orchestrator workflow
 
-1. Confirm the session and learn the installed CLI. The binary is authoritative for syntax:
+1. Confirm the request and the session, then learn the installed CLI. The binary is authoritative for syntax:
 
    ```bash
    test "${HERDR_ENV:-}" = 1
@@ -45,13 +45,14 @@ Any agent kind supported by `herdr agent start --help` (for example `opencode`, 
    herdr pane split --current --direction right --cwd "$PWD" --no-focus
    ```
 
-3. Start the worker with a unique name and the requested kind. Pass native agent arguments, including the matching team role, after `--`. For an OpenCode worker, always pass `--auto` and the role file from `.opencode/agents/team/` that matches the assignment:
+3. Start the worker with a unique name and the requested kind. Pass native arguments after `--`. For an OpenCode worker, pass `--auto`, then select the matching team role with `/agents` or an `@team/<role>` prompt mention; the interactive `opencode` command in the installed 2.3.0 CLI does not accept `--agent`. Use `opencode2 run --agent team/<role> --auto` only for non-interactive runs. For an agy worker, select the project role directly with `--agent` and add `--mode auto` for unattended worker panes:
 
    ```bash
-   herdr agent start reviewer --kind opencode --pane <pane-id> -- --agent team/reviewer --auto
+   herdr agent start reviewer --kind opencode --pane <pane-id> -- --auto
+   herdr agent start parser --kind agy --pane <pane-id> -- --agent zslay-parser --mode auto
    ```
 
-   The direct equivalent is `opencode2 --agent team/reviewer --auto`; an integration worker uses `opencode2 --agent team/integrator --auto`. The available team roles are `architect`, `developer`, `reviewer`, and `integrator` under `.opencode/agents/team/`.
+   Herdr starts the `opencode` executable, not `opencode2`; keep `opencode` on `PATH` pointed at the v2 binary you intend. The OpenCode team roles are `team/architect`, `team/developer`, `team/reviewer`, and `team/integrator` under `.opencode/agents/team/`. The agy roles are `zslay-architect`, `zslay-developer`, `zslay-reviewer`, and `zslay-integrator` under `.agents/agents/`.
 
 4. Send a self-contained prompt. Worker panes do not see the orchestrator transcript, so include the scope boundary, exact paths, expected behavior, acceptance criteria, and verification commands:
 
@@ -59,7 +60,7 @@ Any agent kind supported by `herdr agent start --help` (for example `opencode`, 
    herdr agent prompt reviewer "In src/frame.zig ... Run zig build test. Do not edit files outside this scope." --wait --timeout 120000
    ```
 
-5. Monitor until the worker settles. `agent prompt --wait` returns on `idle`, `done`, or `blocked`. If a worker is `blocked`, show the approval request to the user instead of answering it yourself:
+5. Monitor until the worker settles. `agent prompt --wait` returns on `idle`, `done`, or `blocked`, and can fail with `agent_prompt_stalled` or `timeout`. A stalled or timed-out response does not prove the prompt was not delivered; inspect `agent get` and `agent read` before retrying. If a worker is `blocked`, show the approval request to the user instead of answering it yourself. `--auto` only auto-approves actions that are not explicitly denied, so denied actions and interactive prompts still surface as `blocked`:
 
    ```bash
    herdr agent list

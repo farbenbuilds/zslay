@@ -37,6 +37,7 @@ This document summarizes the AI agent skills configured for the `zslay` project 
 ## Skill Locations and Dependencies
 
 - Shared project skills live in `.agents/skills/` and are recorded in `skills-lock.json`.
+- agy custom agents live in `.agents/agents/` and reference the shared skills through their `skills` frontmatter. agy runs the `graphify` CLI directly; the graphify skill copies remain platform-specific to OpenCode and Codex.
 - OpenCode-specific skills from the graphify installer live in `.opencode/skills/graphify/`; the reminder plugin is `.opencode/plugins/graphify.js`. The installer version-stamps this copy with `.graphify_version` instead of the project lock.
 - Codex-specific skills from the graphify installer live in `.codex/skills/graphify/`; the hook is `.codex/hooks.json`, a no-op compatibility hook because graph guidance comes from `AGENTS.md`.
 - `grill-me` delegates to `grilling`. `improve-codebase-architecture` depends on `codebase-design`, `grilling`, and `domain-modeling`; the read-only architect uses only the exploration and grilling phases and hands report or domain-doc writes to the developer or `zslay-docs`.
@@ -44,7 +45,7 @@ This document summarizes the AI agent skills configured for the `zslay` project 
 
 ## Sub-Agent Directory
 
-`.opencode/agents/` and `.codex/agents/` define matching specialized agents that load these skills before editing. OpenCode team roles live in `.opencode/agents/team/`; Codex uses project TOML files and `.codex/config.toml`:
+`.opencode/agents/`, `.codex/agents/`, and `.agents/agents/` define matching specialized agents that load these skills before editing. OpenCode team roles live in `.opencode/agents/team/`; Codex uses project TOML files and `.codex/config.toml`; agy uses Markdown files under `.agents/agents/`:
 
 | Agent | Area | Skills |
 | --- | --- | --- |
@@ -60,6 +61,8 @@ This document summarizes the AI agent skills configured for the `zslay` project 
 | `team/developer` | Implementation coordination | matched specialist skills, codebase-design, graphify |
 | `team/reviewer` | Read-only quality gate | zslay-style, zslay-dod, zslay-c-ffi, Pragmatic Functional Programming, ponytail, github-git, thermo-nuclear-code-quality-review, codebase-design, graphify |
 | `team/integrator` | Resolve findings and final verification | github-git, ponytail, zslay-style, codebase-design, graphify |
+
+agy uses the hyphenated names `zslay-parser`, `zslay-event-loop`, `zslay-c-abi`, `zslay-node-api`, `zslay-testing`, `zslay-review`, `zslay-release`, and `zslay-docs`, plus the team roles `zslay-architect`, `zslay-developer`, `zslay-reviewer`, and `zslay-integrator`.
 
 Every skill above is assigned to at least one agent. See `AGENT_DIRECTORY.md` for delegation rules, ownership boundaries, and the full coverage matrix.
 

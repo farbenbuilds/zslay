@@ -13,6 +13,7 @@ For contributor workflow see [CONTRIBUTE.md](CONTRIBUTE.md); for code style see 
 | `.opencode/agents/team/` | OpenCode architect, developer, reviewer, and integrator roles. |
 | `.codex/agents/<name>.toml` | Codex project-scoped custom agents. |
 | `.codex/config.toml` | Codex agent and multi-agent feature configuration. |
+| `.agents/agents/<name>.md` | agy custom agents, auto-discovered from the workspace customization root. |
 | `.agents/skills/<name>/SKILL.md` | Shared project skills loaded by the agents and locked in `skills-lock.json`. |
 | `.opencode/skills/graphify/` | Graphify skill installed for OpenCode by `graphify install --platform opencode --project`. |
 | `.opencode/plugins/graphify.js` | OpenCode 1.x/2.x plugin that injects the graph reminder before the first shell command. |
@@ -20,28 +21,31 @@ For contributor workflow see [CONTRIBUTE.md](CONTRIBUTE.md); for code style see 
 | `.codex/hooks.json` | Codex PreToolUse hook registered by the graphify installer. |
 | `skills-lock.json` | Pinned skill sources, paths, and hashes. |
 | `AGENTS.md` | Repository-wide rules that every agent must follow. |
+| `CLAUDE.md` | Claude Code entry point; imports `AGENTS.md`. |
 | `SKILL.md` | Human-readable skill summary and agent-to-skill coverage. |
 
 ## Roster
 
-| Agent | Area | Owned paths | Mode |
+| Agent | Area | Owned paths | Clients |
 | --- | --- | --- | --- |
-| `zslay-parser` | Pure parser core | `src/types.zig`, `src/frame.zig`, `src/queue.zig` | OpenCode and Codex |
-| `zslay-event-loop` | RX/TX state machine | `src/event.zig` | OpenCode and Codex |
-| `zslay-c-abi` | C ABI surface | `src/c_api.zig`, `include/zslay.h` | OpenCode and Codex |
-| `zslay-node-api` | Node-API bindings | `bindings/node/` | OpenCode and Codex |
-| `zslay-testing` | Test suite | `src/test.zig` | OpenCode and Codex |
-| `zslay-review` | Read-only review | any changed file | OpenCode and Codex |
-| `zslay-release` | Build, packaging, CI | `build.zig`, `build.zig.zon`, `flake.nix`, `.github/workflows/` | OpenCode and Codex |
-| `zslay-docs` | Documentation | repository documentation | OpenCode and Codex |
-| `team/architect` / `zslay_architect` | Read-only planning and ownership routing | affected paths | OpenCode and Codex |
-| `team/developer` / `zslay_developer` | Implementation coordination | specialist-owned paths | OpenCode and Codex |
-| `team/reviewer` / `zslay_reviewer` | Read-only quality gate | any changed file | OpenCode and Codex |
-| `team/integrator` / `zslay_integrator` | Resolve findings and final verification | affected paths through their owners | OpenCode and Codex |
+| `zslay-parser` / `zslay_parser` | Pure parser core | `src/types.zig`, `src/frame.zig`, `src/queue.zig` | OpenCode, Codex, agy |
+| `zslay-event-loop` / `zslay_event_loop` | RX/TX state machine | `src/event.zig` | OpenCode, Codex, agy |
+| `zslay-c-abi` / `zslay_c_abi` | C ABI surface | `src/c_api.zig`, `include/zslay.h` | OpenCode, Codex, agy |
+| `zslay-node-api` / `zslay_node_api` | Node-API bindings | `bindings/node/` | OpenCode, Codex, agy |
+| `zslay-testing` / `zslay_testing` | Test suite | `src/test.zig` | OpenCode, Codex, agy |
+| `zslay-review` / `zslay_review` | Read-only review | any changed file | OpenCode, Codex, agy |
+| `zslay-release` / `zslay_release` | Build, packaging, CI | `build.zig`, `build.zig.zon`, `flake.nix`, `.github/workflows/` | OpenCode, Codex, agy |
+| `zslay-docs` / `zslay_docs` | Documentation | repository documentation | OpenCode, Codex, agy |
+| `team/architect` / `zslay_architect` / `zslay-architect` | Read-only planning and ownership routing | affected paths | OpenCode, Codex, agy |
+| `team/developer` / `zslay_developer` / `zslay-developer` | Implementation coordination | specialist-owned paths | OpenCode, Codex, agy |
+| `team/reviewer` / `zslay_reviewer` / `zslay-reviewer` | Read-only quality gate | any changed file | OpenCode, Codex, agy |
+| `team/integrator` / `zslay_integrator` / `zslay-integrator` | Resolve findings and final verification | affected paths through their owners | OpenCode, Codex, agy |
+
+OpenCode and agy use hyphenated names; Codex uses underscore names. The agy definitions live in `.agents/agents/` and are selected with `agy --agent <name>` or the `/agents` picker.
 
 ## Skill Coverage
 
-Every repository skill is loaded by at least one agent.
+Every repository skill is loaded by at least one agent. The agy agents mirror these assignments through the `skills` frontmatter in `.agents/agents/*.md`, referencing the shared folders under `.agents/skills/`. agy runs the `graphify` CLI directly because the graphify skill copies are platform-specific to OpenCode and Codex.
 
 | Skill | Loaded by |
 | --- | --- |
@@ -87,16 +91,18 @@ Every repository skill is loaded by at least one agent.
 8. Keep core code zero-allocation and I/O-agnostic; the Node-API binding layer is the only place allocation is allowed, and only for Node-owned memory.
 9. For codebase questions, run `graphify query` before raw search when `graphify-out/graph.json` exists. Use `graphify path` and `graphify explain` for relationships and focused concepts, and run `graphify update .` after code changes.
 10. Route architecture sweeps through the architect with `improve-codebase-architecture`, `codebase-design`, and `grilling`; route strict maintainability review through `zslay-review` or the team reviewer with `thermo-nuclear-code-quality-review`. The architect is read-only: report and domain-document writes go to the developer or `zslay-docs`.
+11. agy agents live in `.agents/agents/` and load the same roster from `.agents/skills/`. Start them with `agy --agent zslay-<role>` or the `/agents` picker; for unattended worker panes add `--mode auto`. Herdr starts an agy worker with `--kind agy` and passes `--agent zslay-<role> --mode auto` after `--`.
 
 ## Invoking an Agent
 
 - opencode TUI: mention the agent by name, for example `@zslay-parser decode the extended length boundary`.
+- agy: use `agy --agent zslay-parser`, `agy --agent zslay-architect`, or the `/agents` picker. For unattended worker panes, add `--mode auto`. In Herdr, use `herdr agent start parser --kind agy --pane <pane-id> -- --agent zslay-parser --mode auto`.
 - Programmatic orchestration: dispatch the agent by name through the task tool and pass the exact paths, the behavior to change, and the verification command.
 - In every invocation, state the scope boundary so the agent does not edit files owned by another agent.
 
 ## Adding or Changing an Agent
 
-1. Add an OpenCode Markdown definition in `.opencode/agents/` and a Codex TOML definition in `.codex/agents/`, each with the native required fields and matching ownership guidance.
+1. Add an OpenCode Markdown definition in `.opencode/agents/`, a Codex TOML definition in `.codex/agents/`, and an agy Markdown definition in `.agents/agents/`, each with the native required fields and matching ownership guidance.
 2. List the exact existing skills and keep scope disjoint from existing specialists.
 3. Install new skills with `npx skills add` so `.agents/skills/` and `skills-lock.json` stay in sync. Keep graphify-specific skills in `.opencode/skills/` and `.codex/skills/`.
 4. Update the roster and skill coverage tables here and the summary in `SKILL.md`.

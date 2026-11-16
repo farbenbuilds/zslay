@@ -49,8 +49,8 @@ Types are plain, top-level declarations with explicit names. Repeated or inline 
 - `CI_CD_PIPELINE.md` documents CI and publishing; `.github/` contains workflows and community templates.
 - `benchmarks/CONTRACT.md` defines the in-process benchmark cases, result units, and history rules. Case definitions live in `src/bench.zig`; `scripts/benchmark_history.py` publishes results to the separate `benchmark-data` branch.
 - `benchmarks/ECHO_CONTRACT.md` defines the loopback echo workload and metrics. `scripts/benchmark_echo.py` supplies the independent standard-library client; the `benchmark-data` branch keeps echo records under `echo/`.
-- `AGENTS.md`, `SKILL.md`, `.agents/`, and `skills-lock.json` contain repository-specific AI agent guidance.
+- `AGENTS.md`, `CLAUDE.md`, `SKILL.md`, `.agents/`, and `skills-lock.json` contain repository-specific AI agent guidance.
 - `AGENT_DIRECTORY.md` maps the specialized sub-agents to owned paths, delegation rules, and skill coverage.
-- `.opencode/agents/` and `.codex/agents/` hold the sub-agent definitions that each client discovers.
+- `.opencode/agents/`, `.codex/agents/`, and `.agents/agents/` hold the sub-agent definitions that each client discovers.
 - `.opencode/skills/graphify/` and `.codex/skills/graphify/` hold the platform-specific graphify skill. `.opencode/plugins/graphify.js` injects the reminder; `.codex/hooks.json` is a no-op compatibility hook because Codex takes graph guidance from `AGENTS.md`. `graphify-out/` stays local and gitignored.
 - `misc/zslay-banner.png` is the README banner asset.
