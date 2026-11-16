@@ -17,37 +17,47 @@ const DecodedLength = struct {
 
 // Pure: resolves payload length and header byte count from a base header
 fn read_length(buf: []const u8, payload_len: u7) types.Error!DecodedLength {
-    if (payload_len == 126) {
-        if (buf.len < 4) return error.BufferTooShort;
+    if (payload_len == types.ExtendedLength16Marker) {
+        const header_len = types.BaseHeaderLen + types.ExtendedLength16Len;
+        if (buf.len < header_len) return error.BufferTooShort;
 
-        const len: u64 = std.mem.readInt(u16, buf[2..4][0..2], .big);
-        if (len < 126) return error.ProtocolError;
+        const len: u64 = std.mem.readInt(
+            u16,
+            buf[types.BaseHeaderLen..header_len][0..types.ExtendedLength16Len],
+            .big,
+        );
+        if (len < types.ExtendedLength16Threshold) return error.ProtocolError;
 
-        return .{ .payload_len = len, .header_len = 4 };
+        return .{ .payload_len = len, .header_len = header_len };
     }
 
-    if (payload_len == 127) {
-        if (buf.len < 10) return error.BufferTooShort;
+    if (payload_len == types.ExtendedLength64Marker) {
+        const header_len = types.BaseHeaderLen + types.ExtendedLength64Len;
+        if (buf.len < header_len) return error.BufferTooShort;
 
-        const len: u64 = std.mem.readInt(u64, buf[2..10][0..8], .big);
-        if (len < 65536) return error.ProtocolError;
+        const len: u64 = std.mem.readInt(
+            u64,
+            buf[types.BaseHeaderLen..header_len][0..types.ExtendedLength64Len],
+            .big,
+        );
+        if (len < types.ExtendedLength64Threshold) return error.ProtocolError;
         if (len >> 63 != 0) return error.InvalidLength;
 
-        return .{ .payload_len = len, .header_len = 10 };
+        return .{ .payload_len = len, .header_len = header_len };
     }
 
-    return .{ .payload_len = payload_len, .header_len = 2 };
+    return .{ .payload_len = payload_len, .header_len = types.BaseHeaderLen };
 }
 
 // Pure: derives the number of header bytes from the second base header byte
 pub fn header_bytes_needed(base_len_byte: u8) usize {
     const len_marker = base_len_byte & 0x7f;
 
-    var needed: usize = 2;
-    if (len_marker == 126) {
-        needed += 2;
-    } else if (len_marker == 127) {
-        needed += 8;
+    var needed: usize = types.BaseHeaderLen;
+    if (len_marker == types.ExtendedLength16Marker) {
+        needed += types.ExtendedLength16Len;
+    } else if (len_marker == types.ExtendedLength64Marker) {
+        needed += types.ExtendedLength64Len;
     }
 
     if ((base_len_byte & 0x80) != 0) needed += types.MaskingKeyLen;
@@ -66,6 +76,11 @@ pub fn mask(buf: []u8, masking_key: types.MaskingKey, pos: u64) void {
     // The wide word must be a multiple of the four-byte masking key
     const Word = if (@bitSizeOf(usize) >= 64) u64 else u32;
     const word_size = @sizeOf(Word);
+    comptime {
+        std.debug.assert(types.MaskingKeyLen > 0);
+        std.debug.assert(word_size % types.MaskingKeyLen == 0);
+    }
+
     var i: usize = 0;
 
     if (buf.len >= word_size) {
@@ -87,12 +102,14 @@ pub fn mask(buf: []u8, masking_key: types.MaskingKey, pos: u64) void {
 pub fn get_serialized_size(payload_len: u64, is_masked: bool) types.Error!usize {
     if (payload_len > types.MaxPayloadLen) return error.InvalidLength;
 
-    var size: usize = 2;
+    var size: usize = types.BaseHeaderLen;
 
-    if (payload_len >= 126 and payload_len <= 65535) {
-        size += 2;
-    } else if (payload_len > 65535) {
-        size += 8;
+    if (payload_len >= types.ExtendedLength16Threshold) {
+        if (payload_len < types.ExtendedLength64Threshold) {
+            size += types.ExtendedLength16Len;
+        } else {
+            size += types.ExtendedLength64Len;
+        }
     }
 
     if (is_masked) size += types.MaskingKeyLen;
@@ -113,27 +130,38 @@ pub fn encode_header(
         _ => return error.InvalidOpcode,
     }
 
-    if (header.rsv1 or header.rsv2 or header.rsv3) return error.ProtocolError;
+    if (header.rsv1) return error.ProtocolError;
+    if (header.rsv2) return error.ProtocolError;
+    if (header.rsv3) return error.ProtocolError;
     if (payload_len > types.MaxPayloadLen) return error.InvalidLength;
 
-    const marker: u7 = if (payload_len < 126)
+    const marker: u7 = if (payload_len < types.ExtendedLength16Threshold)
         @intCast(payload_len)
-    else if (payload_len <= 65535)
-        126
+    else if (payload_len < types.ExtendedLength64Threshold)
+        types.ExtendedLength16Marker
     else
-        127;
+        types.ExtendedLength64Marker;
 
     if (header.payload_len != marker) return error.ProtocolError;
-    if (op.is_control() and (!header.fin or payload_len > 125)) return error.ProtocolError;
-    if (header.mask and masking_key == null) return error.MaskingKeyRequired;
-    if (!header.mask and masking_key != null) return error.ProtocolError;
+
+    if (op.is_control()) {
+        if (!header.fin) return error.ProtocolError;
+        if (payload_len > types.ControlPayloadMax) return error.ProtocolError;
+    }
+
+    if (header.mask) {
+        if (masking_key == null) return error.MaskingKeyRequired;
+    } else {
+        if (masking_key != null) return error.ProtocolError;
+    }
 
     const extended_size: usize = switch (marker) {
-        126 => 2,
-        127 => 8,
+        types.ExtendedLength16Marker => types.ExtendedLength16Len,
+        types.ExtendedLength64Marker => types.ExtendedLength64Len,
         else => 0,
     };
-    const required_size = 2 + extended_size + if (header.mask) types.MaskingKeyLen else 0;
+    const required_size = types.BaseHeaderLen + extended_size +
+        if (header.mask) types.MaskingKeyLen else 0;
 
     if (buf.len < required_size) return error.BufferTooShort;
 
@@ -141,14 +169,24 @@ pub fn encode_header(
     buf[0] = @intCast(header_int & 0xff);
     buf[1] = @intCast(header_int >> 8);
 
-    var index: usize = 2;
+    var index: usize = types.BaseHeaderLen;
 
-    if (marker == 126) {
-        std.mem.writeInt(u16, buf[index .. index + 2][0..2], @intCast(payload_len), .big);
-        index += 2;
-    } else if (marker == 127) {
-        std.mem.writeInt(u64, buf[index .. index + 8][0..8], payload_len, .big);
-        index += 8;
+    if (marker == types.ExtendedLength16Marker) {
+        std.mem.writeInt(
+            u16,
+            buf[index .. index + types.ExtendedLength16Len][0..types.ExtendedLength16Len],
+            @intCast(payload_len),
+            .big,
+        );
+        index += types.ExtendedLength16Len;
+    } else if (marker == types.ExtendedLength64Marker) {
+        std.mem.writeInt(
+            u64,
+            buf[index .. index + types.ExtendedLength64Len][0..types.ExtendedLength64Len],
+            payload_len,
+            .big,
+        );
+        index += types.ExtendedLength64Len;
     }
 
     if (header.mask) {
@@ -162,23 +200,30 @@ pub fn encode_header(
 
 // Pure: parses a raw byte buffer into a DecodedHeader value
 pub fn decode_header(buf: []const u8) types.Error!DecodedHeader {
-    if (buf.len < 2) return error.BufferTooShort;
+    if (buf.len < types.BaseHeaderLen) return error.BufferTooShort;
 
-    const header_int = std.mem.readInt(u16, buf[0..2][0..2], .little);
+    const header_int = std.mem.readInt(u16, buf[0..types.BaseHeaderLen][0..types.BaseHeaderLen], .little);
     const header: types.FrameHeader = @bitCast(header_int);
     const op: types.Opcode = @fromBackingInt(header.opcode);
 
-    if (header.rsv1 or header.rsv2 or header.rsv3) return error.ProtocolError;
+    if (header.rsv1) return error.ProtocolError;
+    if (header.rsv2) return error.ProtocolError;
+    if (header.rsv3) return error.ProtocolError;
 
     switch (op) {
         .continuation, .text, .binary, .close, .ping, .pong => {},
         _ => return error.InvalidOpcode,
     }
 
-    if (op.is_control() and (header.payload_len >= 126 or !header.fin)) return error.ProtocolError;
+    if (op.is_control()) {
+        if (!header.fin) return error.ProtocolError;
+        if (header.payload_len >= types.ExtendedLength16Marker) return error.ProtocolError;
+    }
 
     const decoded_len = try read_length(buf, header.payload_len);
-    if (op == .close and decoded_len.payload_len == 1) return error.ProtocolError;
+    if (op == .close) {
+        if (decoded_len.payload_len == 1) return error.ProtocolError;
+    }
 
     if (!header.mask) {
         return .{
@@ -204,7 +249,7 @@ pub fn decode_header(buf: []const u8) types.Error!DecodedHeader {
 
 // Pure: validates a close frame payload code and UTF-8 reason
 pub fn validate_close_payload(payload: []const u8) types.Error!void {
-    if (payload.len > 125) return error.ProtocolError;
+    if (payload.len > types.ControlPayloadMax) return error.ProtocolError;
     if (payload.len == 0) return;
     if (payload.len == 1) return error.ProtocolError;
 

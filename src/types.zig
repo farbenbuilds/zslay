@@ -1,3 +1,5 @@
+const std = @import("std");
+
 // WebSocket frame opcodes defined in RFC 6455
 pub const Opcode = enum(u4) {
     continuation = 0x0,
@@ -49,6 +51,18 @@ pub const EndpointRole = enum(u8) {
 // Largest payload length permitted by the RFC 6455 wire format
 pub const MaxPayloadLen: u64 = 0x7fff_ffff_ffff_ffff;
 
+// Fixed-width fields of the RFC 6455 header
+pub const BaseHeaderLen: usize = 2;
+pub const ExtendedLength16Len: usize = 2;
+pub const ExtendedLength64Len: usize = 8;
+
+// Wire thresholds and markers for extended payload lengths
+pub const ControlPayloadMax: u64 = 125;
+pub const ExtendedLength16Threshold: u64 = 126;
+pub const ExtendedLength64Threshold: u64 = 65_536;
+pub const ExtendedLength16Marker: u7 = 126;
+pub const ExtendedLength64Marker: u7 = 127;
+
 // Pure Zig error set for WebSocket frame parsing
 pub const Error = error{
     InvalidOpcode,
@@ -82,7 +96,21 @@ pub const MaskingKeyLen: usize = 4;
 pub const MaskingKey = [MaskingKeyLen]u8;
 
 // Largest possible frame header: base, extended length, and masking key
-pub const MaxFrameHeaderLen: usize = 2 + 8 + MaskingKeyLen;
+pub const MaxFrameHeaderLen: usize = BaseHeaderLen + ExtendedLength64Len + MaskingKeyLen;
 
 // Caller-owned buffer large enough for any WebSocket frame header
 pub const FrameHeaderBuffer = [MaxFrameHeaderLen]u8;
+
+comptime {
+    std.debug.assert(@sizeOf(FrameHeader) == BaseHeaderLen);
+    std.debug.assert(@bitSizeOf(FrameHeader) == BaseHeaderLen * 8);
+    std.debug.assert(MaxFrameHeaderLen == BaseHeaderLen + ExtendedLength64Len + MaskingKeyLen);
+    std.debug.assert(MaskingKeyLen == @sizeOf(MaskingKey));
+    std.debug.assert(ControlPayloadMax <= MaxPayloadLen);
+
+    std.debug.assert(ExtendedLength16Marker == ExtendedLength16Threshold);
+    std.debug.assert(ExtendedLength16Threshold == ControlPayloadMax + 1);
+    std.debug.assert(ExtendedLength16Threshold < ExtendedLength64Threshold);
+    std.debug.assert(ExtendedLength16Len * 8 == @bitSizeOf(u16));
+    std.debug.assert(ExtendedLength64Len * 8 == @bitSizeOf(u64));
+}
