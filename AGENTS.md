@@ -45,11 +45,13 @@ Any agent kind supported by `herdr agent start --help` (for example `opencode`, 
    herdr pane split --current --direction right --cwd "$PWD" --no-focus
    ```
 
-3. Start the worker with a unique name and the requested kind. Pass native agent arguments, including a project agent profile, after `--`:
+3. Start the worker with a unique name and the requested kind. Pass native agent arguments, including the matching team role, after `--`. For an OpenCode worker, always pass `--auto` and the role file from `.opencode/agents/team/` that matches the assignment:
 
    ```bash
-   herdr agent start reviewer --kind opencode --pane <pane-id>
+   herdr agent start reviewer --kind opencode --pane <pane-id> -- --agent team/reviewer --auto
    ```
+
+   The direct equivalent is `opencode2 --agent team/reviewer --auto`; an integration worker uses `opencode2 --agent team/integrator --auto`. The available team roles are `architect`, `developer`, `reviewer`, and `integrator` under `.opencode/agents/team/`.
 
 4. Send a self-contained prompt. Worker panes do not see the orchestrator transcript, so include the scope boundary, exact paths, expected behavior, acceptance criteria, and verification commands:
 
