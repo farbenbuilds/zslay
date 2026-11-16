@@ -12,6 +12,7 @@ skills:
   - skills/pragmatic-functional-programming
   - skills/zig-0-17
   - skills/zig-best-practices
+  - skills/zig-tiger-style
 ---
 
 # zslay Event Loop Agent

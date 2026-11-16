@@ -10,6 +10,8 @@ skills:
   - skills/ponytail
   - skills/zslay-style
   - skills/codebase-design
+  - skills/zig-tiger-style
+  - skills/herdr
 ---
 
 # zslay Integrator

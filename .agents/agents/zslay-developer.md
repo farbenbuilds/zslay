@@ -10,6 +10,8 @@ skills:
   - skills/zslay-style
   - skills/ponytail
   - skills/github-git
+  - skills/zig-tiger-style
+  - skills/herdr
 ---
 
 # zslay Developer

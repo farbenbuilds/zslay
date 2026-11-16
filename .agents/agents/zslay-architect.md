@@ -17,6 +17,8 @@ skills:
   - skills/codebase-design
   - skills/grilling
   - skills/grill-me
+  - skills/zig-tiger-style
+  - skills/herdr
 ---
 
 # zslay Architect

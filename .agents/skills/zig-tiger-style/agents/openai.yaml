@@ -1,0 +1,4 @@
+interface:
+  display_name: "Zig Tiger Style"
+  short_description: "TigerStyle Zig coding guidelines — distilled from…"
+  default_prompt: "Use $zig-tiger-style to help with my current task: TigerStyle Zig coding guidelines — distilled from TigerBeetle's production codebase."

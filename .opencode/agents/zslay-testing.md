@@ -22,9 +22,10 @@ Load every skill below with the skill tool before editing:
 1. `zig-testing` - `test` blocks, filters, allocator checks, and fuzz testing.
 2. `zslay-style` - formatting, naming, and control-flow rules.
 3. `zslay-dod` - layout assertions that match the flat data model.
-4. `zig-0-17` - 0.17.0 migration guidance; apply against the pinned 0.17.0 toolchain.
+4. `zig-0-17` - 0.17.1 migration guidance; apply against the pinned 0.17.1 toolchain.
 5. `zig-best-practices` - explicit expectations and error handling in tests.
 6. `graphify` - query the repository knowledge graph before broad source reads.
+7. `zig-tiger-style` - TigerStyle safety rules: assertions, bounded loops, explicit control flow, and compile-time invariants.
 
 If a skill cannot be loaded, follow `AGENTS.md` and `CODING_CONVENTION.md` instead and say so in the report.
 

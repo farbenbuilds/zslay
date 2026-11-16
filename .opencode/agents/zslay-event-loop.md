@@ -25,9 +25,10 @@ Load every skill below with the skill tool before editing:
 2. `zslay-dod` - flat layouts, index-backed state, zero allocation.
 3. `dod` - general data-oriented review of state layout and locality.
 4. `Pragmatic Functional Programming` - pure helpers around explicit state.
-5. `zig-0-17` - 0.17.0 migration guidance; apply against the pinned 0.17.0 toolchain.
+5. `zig-0-17` - 0.17.1 migration guidance; apply against the pinned 0.17.1 toolchain.
 6. `zig-best-practices` - idiomatic Zig errors, types, and tests.
 7. `graphify` - query the repository knowledge graph before broad source reads.
+8. `zig-tiger-style` - TigerStyle safety rules: assertions, bounded loops, explicit control flow, and compile-time invariants.
 
 If a skill cannot be loaded, follow `AGENTS.md` and `CODING_CONVENTION.md` instead and say so in the report.
 

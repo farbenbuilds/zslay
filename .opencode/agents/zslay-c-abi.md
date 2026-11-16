@@ -23,9 +23,10 @@ Load every skill below with the skill tool before editing:
 
 1. `zslay-c-ffi` - integer widths, extern layouts, `zslay_` prefix, pointer-plus-length boundaries.
 2. `zslay-style` - formatting, naming, and control-flow rules.
-3. `zig-0-17` - 0.17.0 migration guidance; apply against the pinned 0.17.0 toolchain.
+3. `zig-0-17` - 0.17.1 migration guidance; apply against the pinned 0.17.1 toolchain.
 4. `zig-best-practices` - explicit error sets and C interop idioms.
 5. `graphify` - query the repository knowledge graph before broad source reads.
+6. `zig-tiger-style` - TigerStyle safety rules: assertions, bounded loops, explicit control flow, and compile-time invariants.
 
 If a skill cannot be loaded, follow `AGENTS.md`, `CODING_CONVENTION.md`, and `include/zslay.h` instead and say so in the report.
 

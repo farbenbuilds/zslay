@@ -13,6 +13,7 @@ skills:
   - skills/zig-best-practices
   - skills/context7
   - skills/install-anti-slop
+  - skills/zig-tiger-style
 ---
 
 # zslay Node-API Agent
