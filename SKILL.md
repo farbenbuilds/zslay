@@ -44,6 +44,8 @@ This document summarizes the AI agent skills configured for the `zslay` project 
 - Codex-specific skills from the graphify installer live in `.codex/skills/graphify/`; the hook is `.codex/hooks.json`, a no-op compatibility hook because graph guidance comes from `AGENTS.md`.
 - `grill-me` delegates to `grilling`. `improve-codebase-architecture` depends on `codebase-design`, `grilling`, and `domain-modeling`; the read-only architect uses only the exploration and grilling phases and hands report or domain-doc writes to the developer or `zslay-docs`.
 - The architecture and strict-review skills are model-invocable so sub-agents can load them. The local edits remove `disable-model-invocation` and the companion OpenAI manifest policy; a future `npx skills update` may restore both, so recheck the frontmatter and `agents/openai.yaml` files.
+- `zig-tiger-style` carries a local zslay override that keeps `snake_case`, the 120-column limit, and the C ABI. Reapply that override after an upstream `npx skills update`.
+- `.agents/skills/herdr/SKILL.md` is generated with `herdr --skill`; regenerate it after upgrading Herdr and recompute the lock hash.
 
 ## Sub-Agent Directory
 

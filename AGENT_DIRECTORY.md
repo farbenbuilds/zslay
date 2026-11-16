@@ -79,7 +79,9 @@ Every repository skill is loaded by at least one agent. The agy agents mirror th
 
 `zig-tiger-style` adds TigerBeetle-style safety and performance guidance: explicit control flow, entry assertions for programmer errors, bounded loops, compile-time layout invariants, and unit-qualified names. Apply its safety ideas without changing the repository's `snake_case` naming, public API, C ABI, or zero-allocation design.
 
-`herdr` is generated from the installed Herdr CLI with `herdr --skill`. It applies only when the user explicitly asks for Herdr orchestration and requires `HERDR_ENV=1`; it never overrides the ownership and non-delegation rules in `AGENTS.md`.
+`herdr` is generated from the installed Herdr CLI with `herdr --skill`. It applies only when the user explicitly asks for Herdr orchestration and requires `HERDR_ENV=1`; it never overrides the ownership and non-delegation rules in `AGENTS.md`. Regenerate the skill after upgrading Herdr and refresh its lock hash.
+
+The `zig-tiger-style` copy carries a local zslay override for naming and formatting; reapply it if `npx skills update` restores the upstream file.
 
 `grill-me` delegates to `grilling`. `improve-codebase-architecture` uses `codebase-design`, `grilling`, and `domain-modeling`; the read-only architect runs only the exploration and grilling phases and hands report or domain-doc writes to the developer or `zslay-docs`. The architecture and strict-review skills are model-invocable so sub-agents can load them; a future `npx skills update` may restore the upstream `disable-model-invocation` flag and the OpenAI manifest policy.
 
