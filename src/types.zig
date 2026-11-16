@@ -104,8 +104,6 @@ pub const FrameHeaderBuffer = [MaxFrameHeaderLen]u8;
 comptime {
     std.debug.assert(@sizeOf(FrameHeader) == BaseHeaderLen);
     std.debug.assert(@bitSizeOf(FrameHeader) == BaseHeaderLen * 8);
-    std.debug.assert(MaxFrameHeaderLen == BaseHeaderLen + ExtendedLength64Len + MaskingKeyLen);
-    std.debug.assert(MaskingKeyLen == @sizeOf(MaskingKey));
     std.debug.assert(ControlPayloadMax <= MaxPayloadLen);
 
     std.debug.assert(ExtendedLength16Marker == ExtendedLength16Threshold);

@@ -1995,3 +1995,25 @@ test "Event: control payload maximum boundary" {
         conn.prepare_frame(true, .ping, &over_payload, false, null),
     );
 }
+
+test "Event: advance_tx stops at a partial head and preserves later nodes" {
+    var nodes: [3]root.FrameNode = undefined;
+    var conn = try init_conn(&nodes, .server, 1024, 1024);
+
+    for (0..nodes.len) |_| {
+        const node = try conn.prepare_frame(true, .text, "", false, null);
+        try conn.queue_frame(node);
+    }
+
+    nodes[0].header_sent = 1;
+    nodes[1].header_sent = nodes[1].header_len;
+    nodes[2].header_sent = nodes[2].header_len;
+
+    try testing.expectEqual(root.TxAction.write_header, conn.advance_tx().?);
+    try testing.expectEqual(@as(usize, 3), conn.tx_pending());
+    try testing.expectEqual(@as(usize, 1), conn.get_tx_header_buffer().len);
+
+    nodes[0].header_sent = nodes[0].header_len;
+    try testing.expectEqual(null, conn.advance_tx());
+    try testing.expectEqual(@as(usize, 0), conn.tx_pending());
+}
