@@ -34,6 +34,7 @@ Load every skill below with the skill tool before reviewing:
 7. `thermo-nuclear-code-quality-review` - strict maintainability and structural review.
 8. `codebase-design` - deep-module vocabulary for structural findings.
 9. `graphify` - query the repository knowledge graph before broad source reads.
+10. `zig-tiger-style` - TigerStyle safety rules: assertions, bounded loops, explicit control flow, and compile-time invariants.
 
 If a skill cannot be loaded, review against `AGENTS.md` and `CODING_CONVENTION.md` instead and say so in the report.
 

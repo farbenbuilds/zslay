@@ -1,6 +1,6 @@
 # Codebase Map
 
-`zslay` is a zero-allocation, I/O-agnostic WebSocket framing library written in Zig 0.17.0. Callers own buffers and network I/O; the library parses, serializes, masks, and tracks frame state.
+`zslay` is a zero-allocation, I/O-agnostic WebSocket framing library written in Zig 0.17.1. Callers own buffers and network I/O; the library parses, serializes, masks, and tracks frame state.
 
 ## Runtime Flow
 

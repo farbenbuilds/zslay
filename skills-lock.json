@@ -49,6 +49,12 @@
       "skillPath": "skills/productivity/grilling/SKILL.md",
       "computedHash": "f09fd571ad1a759e809b5a3e8327c95221635793b89df9e01c0caeea27f13244"
     },
+    "herdr": {
+      "source": ".agents/skills/herdr",
+      "sourceType": "local",
+      "skillPath": "SKILL.md",
+      "computedHash": "a3b59317f60f6ecdb8bbc537e340faaf9dd08826fd30c84ed947eaa7a28db91b"
+    },
     "improve-codebase-architecture": {
       "source": "mattpocock/skills",
       "sourceType": "github",
@@ -96,6 +102,14 @@
       "sourceType": "github",
       "skillPath": "skills/zig/zig-testing/SKILL.md",
       "computedHash": "0b4e87322173473ee5dc18a8b4152c2a64df2ed0a532576f8e7ea07d9e46ecc0"
+    },
+    "zig-tiger-style": {
+      "source": "full-stack-skills/zig-skills",
+      "commit": "d0d7affe825d7ed4720ce7998e81d0610d07f651",
+      "sourceType": "github",
+      "skillPath": "skills/zig-tiger-style/SKILL.md",
+      "computedHash": "ba00122ff420f146a82fda060dd768309817a6880d82bd737ad506a48b925cf4",
+      "installMode": "copy"
     }
   }
 }

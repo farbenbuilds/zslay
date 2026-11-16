@@ -10,6 +10,7 @@ skills:
   - skills/zslay-style
   - skills/zig-0-17
   - skills/zig-best-practices
+  - skills/zig-tiger-style
 ---
 
 # zslay C ABI Agent

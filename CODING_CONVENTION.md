@@ -1,6 +1,6 @@
 # zslay - Coding Conventions
 
-Code style standards for the `zslay` project using the Zig 0.17.0 toolchain.
+Code style standards for the `zslay` project using the Zig 0.17.1 toolchain.
 
 The `zslay` codebase strictly enforces the **Linux Kernel Coding Style** adapted for Zig. To maintain zero-allocation guarantees, C-ABI compatibility, and Linux Kernel-style C-portability, all pull requests must adhere to the rules below.
 
@@ -49,6 +49,16 @@ For architecture see [CODEBASE.md](CODEBASE.md); for setup, workflows, and relea
 - **Error Handling**: Use Zig's `error` sets and `!`. **Never use `catch unreachable`** unless the condition is mathematically proven impossible.
 - **Resource Cleanup**: Use Zig's `defer` and `errdefer` in place of the traditional Linux Kernel `goto error_out` labels. This guarantees cleanup on scope exit without spaghetti control flow.
 
+### TigerStyle Safety Layer
+
+The project adopts the safety subset of `zig-tiger-style` without adopting its conflicting naming or formatting rules:
+
+- **Assertions**: Use `std.debug.assert` for programmer errors such as broken queue or state invariants. Invalid wire input still returns a typed `types.Error`; assertions never replace protocol validation.
+- **Explicit branches**: Split compound conditions into nested `if`/`else` branches when both the positive and negative spaces need handling.
+- **Bounded loops**: Every loop has a fixed upper bound or an explicit statement of why it is intentionally unbounded, such as the RX/TX state machine.
+- **Compile-time invariants**: Verify header sizes, thresholds, and layout relationships with `comptime` assertions.
+- **Naming and formatting**: Keep zslay's `snake_case` functions and variables, `PascalCase` types, 120-column limit, and existing Nix toolchain. Do not adopt TigerStyle's camelCase function names, 100-column limit, or zero-dependency policy.
+
 ---
 
 ## 3. Functional Programming
@@ -64,7 +74,7 @@ For architecture see [CODEBASE.md](CODEBASE.md); for setup, workflows, and relea
 ## 4. Memory and Allocations
 
 - **Zero-Allocation**: No hidden allocations. The parser must remain completely detached from memory allocators (`std.mem.Allocator`).
-- **I/O Agnostic**: The parser only operates on user-provided slices (`[]u8` or `[]const u8`). It reads and updates state, leaving actual I/O execution (such as using `std.Io` in Zig 0.17.0) and memory management entirely to the caller.
+- **I/O Agnostic**: The parser only operates on user-provided slices (`[]u8` or `[]const u8`). It reads and updates state, leaving actual I/O execution (such as using `std.Io` in Zig 0.17.1) and memory management entirely to the caller.
 - **Large Structures**: Pass large structures by constant pointer (`*const T`) to avoid unnecessary stack copying.
 
 ---

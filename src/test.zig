@@ -1863,3 +1863,157 @@ test "Fuzz: deterministic receive stress" {
         }
     }
 }
+
+test "Types: named wire constants preserve layout invariants" {
+    try testing.expectEqual(@as(usize, 2), root.types.BaseHeaderLen);
+    try testing.expectEqual(@as(usize, 2), root.types.ExtendedLength16Len);
+    try testing.expectEqual(@as(usize, 8), root.types.ExtendedLength64Len);
+    try testing.expectEqual(@as(u64, 125), root.types.ControlPayloadMax);
+    try testing.expectEqual(@as(u64, 126), root.types.ExtendedLength16Threshold);
+    try testing.expectEqual(@as(u64, 65_536), root.types.ExtendedLength64Threshold);
+    try testing.expectEqual(@as(u7, 126), root.types.ExtendedLength16Marker);
+    try testing.expectEqual(@as(u7, 127), root.types.ExtendedLength64Marker);
+
+    try testing.expectEqual(root.types.BaseHeaderLen, @sizeOf(root.FrameHeader));
+    try testing.expectEqual(root.types.BaseHeaderLen * 8, @bitSizeOf(root.FrameHeader));
+    try testing.expectEqual(
+        root.types.BaseHeaderLen + root.types.ExtendedLength64Len + root.MaskingKeyLen,
+        root.MaxFrameHeaderLen,
+    );
+    try testing.expectEqual(root.MaskingKeyLen, @sizeOf(root.MaskingKey));
+    try testing.expect(root.types.ControlPayloadMax <= root.MaxPayloadLen);
+}
+
+test "Queue: discard_front preserves bounded indices across wrap" {
+    var backing_buffer: [3]u32 = undefined;
+    var q = root.Queue(u32).init(&backing_buffer);
+
+    try q.push_back(1);
+    try q.push_back(2);
+    try q.push_back(3);
+    try testing.expectEqual(@as(usize, 0), q.head);
+    try testing.expectEqual(@as(usize, 0), q.tail);
+
+    q.discard_front();
+    q.discard_front();
+    try testing.expectEqual(@as(usize, 2), q.head);
+    try testing.expectEqual(@as(usize, 1), q.len);
+
+    try q.push_back(4);
+    try q.push_back(5);
+    try testing.expectEqual(@as(usize, 2), q.head);
+    try testing.expectEqual(@as(usize, 2), q.tail);
+    try testing.expectEqual(@as(usize, 3), q.len);
+
+    try testing.expectEqual(@as(u32, 3), q.pop_front().?);
+    try testing.expectEqual(@as(u32, 4), q.pop_front().?);
+    try testing.expectEqual(@as(u32, 5), q.pop_front().?);
+    try testing.expectEqual(null, q.front());
+    try testing.expectEqual(@as(usize, 0), q.len);
+}
+
+test "Frame: named thresholds drive serialized header sizes" {
+    try testing.expectEqual(2, try root.get_serialized_size(root.types.ExtendedLength16Threshold - 1, false));
+    try testing.expectEqual(4, try root.get_serialized_size(root.types.ExtendedLength16Threshold, false));
+    try testing.expectEqual(4, try root.get_serialized_size(root.types.ExtendedLength64Threshold - 1, false));
+    try testing.expectEqual(10, try root.get_serialized_size(root.types.ExtendedLength64Threshold, false));
+}
+
+test "Frame: control payload maximum boundary" {
+    var buf: [root.MaxFrameHeaderLen]u8 = undefined;
+    const max_payload: [125]u8 = @splat(0);
+
+    const ping_max = root.FrameHeader{
+        .opcode = @backingInt(root.Opcode.ping),
+        .rsv3 = false,
+        .rsv2 = false,
+        .rsv1 = false,
+        .fin = true,
+        .payload_len = 125,
+        .mask = false,
+    };
+
+    try testing.expectEqual(2, try root.encode_header(&buf, ping_max, max_payload.len, null));
+
+    var ping_over = ping_max;
+    ping_over.payload_len = 126;
+    try testing.expectError(error.ProtocolError, root.encode_header(&buf, ping_over, 126, null));
+
+    const decoded_max = try root.decode_header(&[_]u8{ 0x89, 125 });
+    try testing.expectEqual(125, decoded_max.payload_len);
+    try testing.expectError(error.ProtocolError, root.decode_header(&[_]u8{ 0x89, 126, 0, 126 }));
+}
+
+test "Event: advance_tx drains completed nodes within the queue bound" {
+    var nodes: [3]root.FrameNode = undefined;
+    var conn = try init_conn(&nodes, .server, 1024, 1024);
+
+    for (0..nodes.len) |_| {
+        const node = try conn.prepare_frame(true, .text, "", false, null);
+        try conn.queue_frame(node);
+    }
+
+    for (&nodes) |*node| {
+        node.header_sent = node.header_len;
+        node.payload_sent = node.payload.len;
+    }
+
+    try testing.expectEqual(null, conn.advance_tx());
+    try testing.expectEqual(@as(usize, 0), conn.tx_pending());
+}
+
+test "Event: fragmented message length accepts the exact limit" {
+    var nodes: [1]root.FrameNode = undefined;
+    var conn = try init_conn(&nodes, .client, 10, 10);
+
+    try testing.expectEqual(root.RxAction.need_payload, try load_header(&conn, &[_]u8{ 0x01, 6 }));
+    try conn.advance_payload_read(6);
+    try conn.complete_frame();
+
+    try testing.expectEqual(root.RxAction.need_payload, try load_header(&conn, &[_]u8{ 0x80, 4 }));
+    try conn.advance_payload_read(4);
+    try conn.complete_frame();
+    try testing.expectEqual(null, conn.rx_fragment.opcode);
+
+    conn = try init_conn(&nodes, .client, 10, 10);
+    try testing.expectEqual(root.RxAction.need_payload, try load_header(&conn, &[_]u8{ 0x01, 6 }));
+    try conn.advance_payload_read(6);
+    try conn.complete_frame();
+    try testing.expectError(error.PayloadTooLarge, load_header(&conn, &[_]u8{ 0x80, 5 }));
+}
+
+test "Event: control payload maximum boundary" {
+    var nodes: [1]root.FrameNode = undefined;
+    const conn = try init_conn(&nodes, .server, 1024, 1024);
+
+    const max_payload: [125]u8 = @splat(0);
+    const over_payload: [126]u8 = @splat(0);
+
+    _ = try conn.prepare_frame(true, .ping, &max_payload, false, null);
+    try testing.expectError(
+        error.ProtocolError,
+        conn.prepare_frame(true, .ping, &over_payload, false, null),
+    );
+}
+
+test "Event: advance_tx stops at a partial head and preserves later nodes" {
+    var nodes: [3]root.FrameNode = undefined;
+    var conn = try init_conn(&nodes, .server, 1024, 1024);
+
+    for (0..nodes.len) |_| {
+        const node = try conn.prepare_frame(true, .text, "", false, null);
+        try conn.queue_frame(node);
+    }
+
+    nodes[0].header_sent = 1;
+    nodes[1].header_sent = nodes[1].header_len;
+    nodes[2].header_sent = nodes[2].header_len;
+
+    try testing.expectEqual(root.TxAction.write_header, conn.advance_tx().?);
+    try testing.expectEqual(@as(usize, 3), conn.tx_pending());
+    try testing.expectEqual(@as(usize, 1), conn.get_tx_header_buffer().len);
+
+    nodes[0].header_sent = nodes[0].header_len;
+    try testing.expectEqual(null, conn.advance_tx());
+    try testing.expectEqual(@as(usize, 0), conn.tx_pending());
+}

@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-11-16
+
+### Added
+
+- `zig-tiger-style` and `herdr` skills in the agent system, with matching guidance for the OpenCode, Codex, and agy agent roles.
+- TigerStyle-informed assertions and invariant checks across the parser and connection state paths.
+
+### Changed
+
+- Require Zig `0.17.1`; pin the Nix dev shell, lint workflow, and `zig-0-17` skill guidance to the new toolchain.
+- Bump the package version to `0.4.0`.
+- Refresh README, CODEBASE, CONTRIBUTE, CI/CD, and agent documentation for the pinned toolchain and the `0.4.0` release examples.
+
+### Fixed
+
+- Formatting and release verification now run on Zig `0.17.1`, so the minimum Zig version, Nix shell, lint job, and documentation no longer disagree.
+
+### Refactored
+
+- Apply the TigerStyle-informed core safety refactor: enforce explicit preconditions, keep arithmetic and index bounds checked, and narrow mutation to caller-owned buffers and connection state.
+
 ## [0.3.0] - 2026-10-22
 
 ### Added

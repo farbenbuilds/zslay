@@ -18,6 +18,7 @@ skills:
   - skills/github-git
   - skills/thermo-nuclear-code-quality-review
   - skills/codebase-design
+  - skills/zig-tiger-style
 ---
 
 # zslay Reviewer

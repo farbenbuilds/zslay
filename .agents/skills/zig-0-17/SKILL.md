@@ -1,24 +1,24 @@
 ---
 name: zig-0-17
-description: Zig 0.17.0 API guidance and porting notes. Use this when writing or upgrading Zig code to the 0.17.0 stable release (@backingInt/@fromBackingInt, SafeAllocator, SoA type reflection, build system maker/configurer separation).
+description: Zig 0.17.1 API guidance and porting notes. Use this when writing or upgrading Zig code to the 0.17.1 stable release (@backingInt/@fromBackingInt, SafeAllocator, SoA type reflection, build system maker/configurer separation).
 license: MIT
 compatibility:
   - opencode
   - claude-code
 metadata:
-  version: "0.17.0"
+  version: "0.17.1"
   language: "zig"
   category: "programming-language"
 ---
 
-# Zig 0.17.0 Programming Guide
+# Zig 0.17.1 Programming Guide
 
-> **Version Scope**: Pinned to **Zig 0.17.0** (stable).
-> **Release Notes**: https://ziglang.org/download/0.17.0/release-notes.html
+> **Version Scope**: Pinned to **Zig 0.17.1** (stable).
+> **Release Notes**: https://ziglang.org/download/0.17.0/release-notes.html (0.17.1 shares the 0.17.0 release notes)
 >
-> **Repository note**: `zslay` pins Zig 0.17.0 in `flake.nix` and `build.zig.zon`; this is the active toolchain guidance.
+> **Repository note**: `zslay` pins Zig 0.17.1 in `flake.nix` and `build.zig.zon`; this is the active toolchain guidance.
 
-Zig 0.17.0 advances language stability towards 1.0. Major highlights include replacing `@intFromEnum`/`@enumFromInt` with `@backingInt`/`@fromBackingInt`, moving type reflection (`std.lang.Type`) and container builtins to Struct-Of-Arrays (SoA) style, removing array multiplication syntax `**` in favor of `@splat`, replacing `DebugAllocator` with the thread-safe `SafeAllocator`, moving `fmt.allocPrint` into `mem.Allocator`, decoupling C translation to an external package, and separating the Build System into distinct Configurer and Maker processes with fine-grained cache poisoning tracking.
+Zig 0.17.1 advances language stability towards 1.0. Major highlights include replacing `@intFromEnum`/`@enumFromInt` with `@backingInt`/`@fromBackingInt`, moving type reflection (`std.lang.Type`) and container builtins to Struct-Of-Arrays (SoA) style, removing array multiplication syntax `**` in favor of `@splat`, replacing `DebugAllocator` with the thread-safe `SafeAllocator`, moving `fmt.allocPrint` into `mem.Allocator`, decoupling C translation to an external package, and separating the Build System into distinct Configurer and Maker processes with fine-grained cache poisoning tracking.
 
 ---
 
@@ -35,7 +35,7 @@ Always check local docs or source before searching online.
 
 ## Quick Reference: Top Breaking Changes
 
-| Old (0.16.x) | New (0.17.0) | Notes |
+| Old (0.16.x) | New (0.17.1) | Notes |
 |---|---|---|
 | `@intFromEnum(val)` | `@backingInt(val)` | Also works on bitpacks and tagged unions |
 | `@enumFromInt(val)` | `@fromBackingInt(val)` | Return type inferred; illegal values safety-checked |
@@ -96,7 +96,7 @@ const TagInt = std.meta.BackingInt(Status); // u8
 
 ### 2. `@bitCast` Semantics: Logical Bit Representation Only
 
-Zig 0.17.0 redefined `@bitCast` to reinterpret the **logical bit representation** of values, making it strictly endian-agnostic:
+Zig 0.17.1 redefined `@bitCast` to reinterpret the **logical bit representation** of values, making it strictly endian-agnostic:
 - Allowed types: `void`, `bool`, integers (except `comptime_int`), floats (except `comptime_float`), integer-backed `enum(T)`, `packed struct(T)`, `packed union(T)`, and arrays/vectors thereof.
 - **Forbidden**: `extern struct` and `extern union` can no longer be passed to `@bitCast`.
 - To type-pun memory representations of `extern struct`, use `@ptrCast` or an `extern union`:
@@ -461,7 +461,7 @@ This still links the library by name; it only prevents Zig from invoking
 
 ---
 
-## Common Idioms in Zig 0.17.0
+## Common Idioms in Zig 0.17.1
 
 ### Standard Project Entrypoint (Juicy Main)
 
@@ -474,7 +474,7 @@ pub fn main(init: std.process.Init) !void {
     const arena = init.arena.allocator();
 
     // Print to stdout
-    try std.Io.File.stdout().writeStreamingAll(io, "Running on Zig 0.17.0!\n");
+    try std.Io.File.stdout().writeStreamingAll(io, "Running on Zig 0.17.1!\n");
 
     // Dynamic formatted string
     const greeting = try gpa.print("Hello, {s}!", .{"World"});

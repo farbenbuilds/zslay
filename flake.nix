@@ -28,7 +28,7 @@
           then pkgs.pkgsMusl
           else null;
 
-        zig = inputs.zig-overlay.packages.${system}."0.17.0";
+        zig = inputs.zig-overlay.packages.${system}."0.17.1";
 
         mkDevShell = p:
           p.mkShell {
