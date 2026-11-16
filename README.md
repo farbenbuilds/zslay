@@ -136,7 +136,7 @@ Close validation is available to both Zig and C callers through `validate_close_
 
 ## AI Agent Workflows
 
-Repository-specific sub-agents live in `.opencode/agents/` and `.codex/agents/`, covering the parser, event loop, C ABI, Node-API bindings, tests, review, release, and documentation. Each client loads shared skills from `.agents/skills/` plus its platform directory (`.opencode/skills/` or `.codex/skills/`) and verifies changes with `zig build test` and `zig fmt --check .`. Codebase questions query the local graphify graph when `graphify-out/graph.json` exists. The roster, ownership map, and skill coverage are documented in [AGENT_DIRECTORY.md](AGENT_DIRECTORY.md).
+Repository-specific sub-agents live in `.opencode/agents/`, `.codex/agents/`, and `.agents/agents/`, covering the parser, event loop, C ABI, Node-API bindings, tests, review, release, and documentation. Each client loads shared skills from `.agents/skills/` plus its platform directory (`.opencode/skills/` or `.codex/skills/`); agy loads the shared skills directly. Claude Code loads `CLAUDE.md`, which imports `AGENTS.md`. Agents verify changes with `zig build test` and `zig fmt --check .`. Codebase questions query the local graphify graph when `graphify-out/graph.json` exists. The roster, ownership map, and skill coverage are documented in [AGENT_DIRECTORY.md](AGENT_DIRECTORY.md).
 
 ## Credits
 
