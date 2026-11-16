@@ -4,11 +4,11 @@
 
 # zslay - Zero-allocation, I/O-agnostic WebSocket framing library
 
-`zslay` is a pure Zig (0.17.0) port of the C-based `wslay` library. It acts as a highly optimized, memory-safe, and I/O-agnostic core for parsing WebSocket (RFC 6455) frames.
+`zslay` is a pure Zig (0.17.1) port of the C-based `wslay` library. It acts as a highly optimized, memory-safe, and I/O-agnostic core for parsing WebSocket (RFC 6455) frames.
 
-## Why Zig 0.17.0?
+## Why Zig 0.17.1?
 
-Zig 0.17.0 brings a suite of powerful features perfectly suited for systems-level parsers:
+Zig 0.17.1 brings a suite of powerful features perfectly suited for systems-level parsers:
 - **Zero Hidden Control Flow:** Predictable performance with no hidden allocations or exceptions.
 - **Memory Safety:** Built-in spatial safety and compile-time checks catch bounds and alignment errors early.
 - **Fast Compilation & FFI:** Drop-in C ABI compatibility natively without overhead. It smoothly integrates with Node.js, Python, Rust, and others via C FFI.
@@ -66,7 +66,7 @@ cd zslay
 ```
 
 **2. Enter the hermetic Nix environment**
-*(Provides Zig 0.17.0 and all necessary tooling)*
+*(Provides Zig 0.17.1 and all necessary tooling)*
 ```bash
 nix develop
 ```
