@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - 2026-11-17
+
+### Changed
+
+- Breaking: rename `Opcode.fromWire` to `Opcode.from_wire` and `EndpointRole.fromWire` to
+  `EndpointRole.from_wire` to follow the repository's `snake_case` function convention.
+- Bump the package version to `0.5.0`.
+- `0.5.0` is the semver boundary for the `from_wire` rename and for the API changes first shipped
+  in `0.4.5`.
+
+### Fixed
+
+- Restore source compatibility for the public Zig API changed in `0.4.5`: `encode_header` again
+  rejects a `FrameHeader.payload_len` that disagrees with `payload_len`, and
+  `Conn.validate_outgoing_frame` again accepts `payload_len: u64`. The payload-slice close
+  validation remains available as `Conn.validate_outgoing_frame_payload`.
+
+### Removed
+
+- Remove the historical `CODE_AUDIT_20260829.md` snapshot.
+
 ## [0.4.5] - 2026-11-17
 
 ### Added

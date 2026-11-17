@@ -15,7 +15,7 @@ const DecodedLength = struct {
     header_len: usize,
 };
 
-fn length_marker(payload_len: u64) u7 {
+pub fn length_marker(payload_len: u64) u7 {
     if (payload_len < types.ExtendedLength16Threshold) return @intCast(payload_len);
     if (payload_len < types.ExtendedLength64Threshold) return types.ExtendedLength16Marker;
     return types.ExtendedLength64Marker;
@@ -118,7 +118,7 @@ pub fn encode_header(
     payload_len: u64,
     masking_key: ?types.MaskingKey,
 ) types.Error!usize {
-    const op = types.Opcode.fromWire(header.opcode) orelse return error.InvalidOpcode;
+    const op = types.Opcode.from_wire(header.opcode) orelse return error.InvalidOpcode;
 
     if (header.rsv1) return error.ProtocolError;
     if (header.rsv2) return error.ProtocolError;
@@ -137,14 +137,14 @@ pub fn encode_header(
     }
 
     const marker = length_marker(payload_len);
+    if (header.payload_len != marker) return error.ProtocolError;
+
     const required_size = types.BaseHeaderLen + extended_length_size(marker) +
         if (header.mask) types.MaskingKeyLen else 0;
 
     if (buf.len < required_size) return error.BufferTooShort;
 
-    var wire_header = header;
-    wire_header.payload_len = marker;
-    const header_int: u16 = @bitCast(wire_header);
+    const header_int: u16 = @bitCast(header);
     buf[0] = @intCast(header_int & 0xff);
     buf[1] = @intCast(header_int >> 8);
 
@@ -187,7 +187,7 @@ pub fn decode_header(buf: []const u8) types.Error!DecodedHeader {
     if (header.rsv2) return error.ProtocolError;
     if (header.rsv3) return error.ProtocolError;
 
-    const op = types.Opcode.fromWire(header.opcode) orelse return error.InvalidOpcode;
+    const op = types.Opcode.from_wire(header.opcode) orelse return error.InvalidOpcode;
 
     if (op.is_control()) {
         if (!header.fin) return error.ProtocolError;

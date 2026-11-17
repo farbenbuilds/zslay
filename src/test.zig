@@ -202,19 +202,19 @@ test "Types: wire bit offsets and control classification" {
 }
 
 test "Types: wire conversion rejects unknown opcodes and roles" {
-    try testing.expectEqual(root.Opcode.continuation, root.Opcode.fromWire(0x0).?);
-    try testing.expectEqual(root.Opcode.text, root.Opcode.fromWire(0x1).?);
-    try testing.expectEqual(root.Opcode.binary, root.Opcode.fromWire(0x2).?);
-    try testing.expectEqual(root.Opcode.close, root.Opcode.fromWire(0x8).?);
-    try testing.expectEqual(root.Opcode.ping, root.Opcode.fromWire(0x9).?);
-    try testing.expectEqual(root.Opcode.pong, root.Opcode.fromWire(0xa).?);
-    try testing.expectEqual(null, root.Opcode.fromWire(0x3));
+    try testing.expectEqual(root.Opcode.continuation, root.Opcode.from_wire(0x0).?);
+    try testing.expectEqual(root.Opcode.text, root.Opcode.from_wire(0x1).?);
+    try testing.expectEqual(root.Opcode.binary, root.Opcode.from_wire(0x2).?);
+    try testing.expectEqual(root.Opcode.close, root.Opcode.from_wire(0x8).?);
+    try testing.expectEqual(root.Opcode.ping, root.Opcode.from_wire(0x9).?);
+    try testing.expectEqual(root.Opcode.pong, root.Opcode.from_wire(0xa).?);
+    try testing.expectEqual(null, root.Opcode.from_wire(0x3));
     try testing.expect(root.Opcode.close.is_known());
     try testing.expect(!@as(root.Opcode, @fromBackingInt(3)).is_known());
 
-    try testing.expectEqual(root.EndpointRole.client, root.EndpointRole.fromWire(0).?);
-    try testing.expectEqual(root.EndpointRole.server, root.EndpointRole.fromWire(1).?);
-    try testing.expectEqual(null, root.EndpointRole.fromWire(2));
+    try testing.expectEqual(root.EndpointRole.client, root.EndpointRole.from_wire(0).?);
+    try testing.expectEqual(root.EndpointRole.server, root.EndpointRole.from_wire(1).?);
+    try testing.expectEqual(null, root.EndpointRole.from_wire(2));
 }
 
 test "Queue: zero-allocation ring buffer" {
@@ -336,15 +336,10 @@ test "Frame: XOR masking (vectorized and scalar paths)" {
     var buf = [_]u8{ 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99 };
     const key = root.MaskingKey{ 0xA, 0xB, 0xC, 0xD };
 
-    // Mask
     root.mask(&buf, key, 0);
-    // Ensure modified
     try testing.expect(buf[0] != 0x11);
 
-    // Unmask
     root.mask(&buf, key, 0);
-
-    // Ensure identical
     try testing.expectEqualSlices(u8, &[_]u8{ 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99 }, &buf);
 }
 
@@ -394,34 +389,26 @@ test "Frame: encode derives the wire marker from the payload length" {
         .mask = false,
     };
 
-    try testing.expectEqual(2, try root.encode_header(&buf, short_header, 5, null));
-    try testing.expectEqual(@as(u8, 5), buf[1] & 0x7f);
-
-    buf = @splat(0xa5);
-    try testing.expectEqual(4, try root.encode_header(&buf, short_header, 126, null));
-    try testing.expectEqual(@as(u8, 126), buf[1] & 0x7f);
-
-    buf = @splat(0xa5);
-    try testing.expectEqual(10, try root.encode_header(&buf, short_header, 70000, null));
-    try testing.expectEqual(@as(u8, 127), buf[1] & 0x7f);
+    try testing.expectError(error.ProtocolError, root.encode_header(&buf, short_header, 70000, null));
+    try testing.expectEqualSlices(u8, &@as([16]u8, @splat(0xa5)), &buf);
 
     var ping_header = short_header;
     ping_header.opcode = @backingInt(root.Opcode.ping);
-    buf = @splat(0xa5);
+    ping_header.payload_len = 0;
     try testing.expectError(error.ProtocolError, root.encode_header(&buf, ping_header, 1000, null));
-    try testing.expectEqualSlices(u8, &@as([16]u8, @splat(0xa5)), &buf);
+
+    try testing.expectEqual(2, try root.encode_header(&buf, short_header, 5, null));
+    try testing.expectEqual(@as(u8, 5), buf[1] & 0x7f);
 
     var masked = short_header;
     masked.mask = true;
     try testing.expectError(error.MaskingKeyRequired, root.encode_header(&buf, masked, 5, null));
     try testing.expectError(error.ProtocolError, root.encode_header(&buf, short_header, 5, key));
 
-    var short_buf: [2]u8 = @splat(0xa5);
-    try testing.expectError(error.BufferTooShort, root.encode_header(&short_buf, short_header, 126, null));
-    try testing.expectEqualSlices(u8, &[_]u8{ 0xa5, 0xa5 }, &short_buf);
-
+    var empty_header = short_header;
+    empty_header.payload_len = 0;
     var empty: [0]u8 = .{};
-    try testing.expectError(error.BufferTooShort, root.encode_header(&empty, short_header, 0, null));
+    try testing.expectError(error.BufferTooShort, root.encode_header(&empty, empty_header, 0, null));
 }
 
 test "Frame: masking matches a byte-wise reference at every offset" {
@@ -480,7 +467,7 @@ test "Connection: stream extended headers before payload" {
     try testing.expectEqual(root.RxAction.need_payload, try load_header(&conn, &[_]u8{ 0x00, 0x80 }));
 }
 
-test "Frame: encode ignores caller markers and writes canonical lengths" {
+test "Frame: reject inconsistent extended length markers before writing" {
     const base = root.FrameHeader{
         .opcode = @backingInt(root.Opcode.binary),
         .rsv3 = false,
@@ -491,25 +478,23 @@ test "Frame: encode ignores caller markers and writes canonical lengths" {
         .mask = false,
     };
 
-    var buf: [16]u8 = undefined;
-    try testing.expectEqual(2, try root.encode_header(&buf, base, 125, null));
-    try testing.expectEqual(@as(u8, 125), buf[1] & 0x7f);
-
-    try testing.expectEqual(4, try root.encode_header(&buf, base, 126, null));
-    try testing.expectEqual(@as(u8, 126), buf[1] & 0x7f);
-
-    try testing.expectEqual(4, try root.encode_header(&buf, base, 65535, null));
-    try testing.expectEqual(@as(u8, 126), buf[1] & 0x7f);
-
-    try testing.expectEqual(10, try root.encode_header(&buf, base, 65536, null));
-    try testing.expectEqual(@as(u8, 127), buf[1] & 0x7f);
-
-    try testing.expectEqual(10, try root.encode_header(&buf, base, root.MaxPayloadLen, null));
-    try testing.expectEqual(@as(u8, 127), buf[1] & 0x7f);
-
     var short_buf: [2]u8 = @splat(0xa5);
-    try testing.expectError(error.InvalidLength, root.encode_header(&short_buf, base, 1 << 63, null));
+    try testing.expectError(error.ProtocolError, root.encode_header(&short_buf, base, 125, null));
     try testing.expectEqualSlices(u8, &[_]u8{ 0xa5, 0xa5 }, &short_buf);
+
+    var marker_127 = base;
+    marker_127.payload_len = 127;
+    try testing.expectError(error.ProtocolError, root.encode_header(&short_buf, marker_127, 65535, null));
+    try testing.expectEqualSlices(u8, &[_]u8{ 0xa5, 0xa5 }, &short_buf);
+    try testing.expectError(error.InvalidLength, root.encode_header(&short_buf, marker_127, 1 << 63, null));
+
+    var exact_126: [4]u8 = undefined;
+    try testing.expectEqual(4, try root.encode_header(&exact_126, base, 126, null));
+    try testing.expectEqual(4, try root.encode_header(&exact_126, base, 65535, null));
+
+    var exact_127: [10]u8 = undefined;
+    try testing.expectEqual(10, try root.encode_header(&exact_127, marker_127, 65536, null));
+    try testing.expectEqual(10, try root.encode_header(&exact_127, marker_127, root.MaxPayloadLen, null));
 }
 
 test "Frame: decode canonical payload length boundaries" {
@@ -664,6 +649,19 @@ test "Connection: fail closed for masking keys and outbound direction" {
     try testing.expectError(
         error.PayloadTooLarge,
         server.prepare_frame(true, .text, "longer", false, null),
+    );
+}
+
+test "Connection: validate_outgoing_frame keeps the payload-length signature" {
+    var nodes: [1]root.FrameNode = undefined;
+    const conn = try init_conn(&nodes, .server, 1024, 1024);
+
+    try conn.validate_outgoing_frame(true, .text, 5, false);
+    try testing.expectError(error.PayloadTooLarge, conn.validate_outgoing_frame(true, .text, 1025, false));
+    try testing.expectError(error.PayloadMasked, conn.validate_outgoing_frame(true, .text, 5, true));
+    try testing.expectError(
+        error.ProtocolError,
+        conn.validate_outgoing_frame_payload(true, .close, &[_]u8{0x03}, false),
     );
 }
 
@@ -1366,7 +1364,15 @@ test "C API: prepare_frame maps close and direction errors" {
     var valid_close = [_]u8{ 0x03, 0xE8 };
     try testing.expectEqual(
         c_api.ResultOk,
-        c_api.zslay_conn_prepare_frame(conn, &node, 1, @backingInt(root.Opcode.close), &valid_close, valid_close.len, 0),
+        c_api.zslay_conn_prepare_frame(
+            conn,
+            &node,
+            1,
+            @backingInt(root.Opcode.close),
+            &valid_close,
+            valid_close.len,
+            0,
+        ),
     );
     try testing.expectEqual(@as(u8, 0x88), node.header_buf[0]);
 
@@ -1378,7 +1384,15 @@ test "C API: prepare_frame maps close and direction errors" {
     var bad_utf8_close = [_]u8{ 0x03, 0xE8, 0xff };
     try testing.expectEqual(
         c_api.ResultInvalidUtf8,
-        c_api.zslay_conn_prepare_frame(conn, &node, 1, @backingInt(root.Opcode.close), &bad_utf8_close, bad_utf8_close.len, 0),
+        c_api.zslay_conn_prepare_frame(
+            conn,
+            &node,
+            1,
+            @backingInt(root.Opcode.close),
+            &bad_utf8_close,
+            bad_utf8_close.len,
+            0,
+        ),
     );
 
     try testing.expectEqual(

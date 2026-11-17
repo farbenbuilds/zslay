@@ -18,7 +18,7 @@ pub const Opcode = enum(u4) {
         };
     }
 
-    pub fn fromWire(raw: u8) ?Opcode {
+    pub fn from_wire(raw: u8) ?Opcode {
         return switch (raw) {
             @backingInt(Opcode.continuation) => .continuation,
             @backingInt(Opcode.text) => .text,
@@ -31,7 +31,7 @@ pub const Opcode = enum(u4) {
     }
 
     pub fn is_known(self: Opcode) bool {
-        return fromWire(@backingInt(self)) != null;
+        return from_wire(@backingInt(self)) != null;
     }
 };
 
@@ -63,7 +63,7 @@ pub const EndpointRole = enum(u8) {
     client = 0,
     server = 1,
 
-    pub fn fromWire(raw: u8) ?EndpointRole {
+    pub fn from_wire(raw: u8) ?EndpointRole {
         return switch (raw) {
             @backingInt(EndpointRole.client) => .client,
             @backingInt(EndpointRole.server) => .server,

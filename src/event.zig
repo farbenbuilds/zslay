@@ -162,7 +162,7 @@ pub const Conn = struct {
 
         try validate_incoming_masking(self.role, decoded.header.mask);
 
-        const op = types.Opcode.fromWire(decoded.header.opcode) orelse return error.InvalidOpcode;
+        const op = types.Opcode.from_wire(decoded.header.opcode) orelse return error.InvalidOpcode;
         if (op.is_control()) return;
 
         switch (op) {
@@ -232,7 +232,7 @@ pub const Conn = struct {
     }
 
     fn commit_fragment_state(self: *Conn, decoded: frame.DecodedHeader) types.Error!void {
-        const op = types.Opcode.fromWire(decoded.header.opcode) orelse return error.InvalidOpcode;
+        const op = types.Opcode.from_wire(decoded.header.opcode) orelse return error.InvalidOpcode;
         if (op.is_control()) return;
 
         switch (op) {
@@ -462,8 +462,8 @@ pub const Conn = struct {
         const payload_len: u64 = @intCast(node.payload.len);
         if (decoded.payload_len != payload_len) return error.InvalidLength;
 
-        const op = types.Opcode.fromWire(decoded.header.opcode) orelse return error.InvalidOpcode;
-        try self.validate_outgoing_frame(decoded.header.fin, op, node.payload, decoded.header.mask);
+        const op = types.Opcode.from_wire(decoded.header.opcode) orelse return error.InvalidOpcode;
+        try self.validate_outgoing_frame_payload(decoded.header.fin, op, node.payload, decoded.header.mask);
         if (op.is_control()) return .{ .opcode = op, .fragment = self.tx_fragment };
 
         switch (op) {
@@ -526,12 +526,11 @@ pub const Conn = struct {
         self: *const Conn,
         fin: bool,
         opcode: types.Opcode,
-        payload: []const u8,
+        payload_len: u64,
         is_masked: bool,
     ) types.Error!void {
         if (!opcode.is_known()) return error.InvalidOpcode;
 
-        const payload_len: u64 = @intCast(payload.len);
         if (payload_len > self.max_frame_len) return error.PayloadTooLarge;
 
         if (opcode.is_control()) {
@@ -542,7 +541,16 @@ pub const Conn = struct {
         }
 
         try validate_outgoing_masking(self.role, is_masked);
+    }
 
+    pub fn validate_outgoing_frame_payload(
+        self: *const Conn,
+        fin: bool,
+        opcode: types.Opcode,
+        payload: []const u8,
+        is_masked: bool,
+    ) types.Error!void {
+        try self.validate_outgoing_frame(fin, opcode, @intCast(payload.len), is_masked);
         if (opcode == .close) try frame.validate_close_payload(payload);
     }
 
@@ -554,7 +562,7 @@ pub const Conn = struct {
         is_masked: bool,
         masking_key_opt: ?types.MaskingKey,
     ) types.Error!FrameNode {
-        try self.validate_outgoing_frame(fin, opcode, payload, is_masked);
+        try self.validate_outgoing_frame_payload(fin, opcode, payload, is_masked);
 
         if (is_masked) {
             if (masking_key_opt == null) return error.MaskingKeyRequired;
@@ -567,8 +575,9 @@ pub const Conn = struct {
             .payload = payload,
         };
 
+        const payload_len: u64 = @intCast(payload.len);
         const header = types.FrameHeader{
-            .payload_len = 0,
+            .payload_len = frame.length_marker(payload_len),
             .mask = is_masked,
             .opcode = @backingInt(opcode),
 
@@ -577,11 +586,10 @@ pub const Conn = struct {
             .rsv1 = false,
             .fin = fin,
         };
-        // encode_header derives the wire marker from the payload length.
         node.header_len = try frame.encode_header(
             &node.header_buf,
             header,
-            @intCast(payload.len),
+            payload_len,
             key,
         );
         return node;

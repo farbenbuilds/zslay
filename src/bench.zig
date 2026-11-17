@@ -185,7 +185,8 @@ pub fn main(init: std.process.Init) !void {
     var stdout = std.Io.File.stdout().writer(io, &out_buf);
     const out = &stdout.interface;
     try out.print(
-        "{{\"schema_version\":1,\"benchmark\":\"zslay-core\",\"warmup_operations\":{d},\"iterations_per_sample\":{d},\"repetitions\":{d},\"cases\":[",
+        "{{\"schema_version\":1,\"benchmark\":\"zslay-core\",\"warmup_operations\":{d}," ++
+            "\"iterations_per_sample\":{d},\"repetitions\":{d},\"cases\":[",
         .{ WarmupOperations, IterationsPerSample, Repetitions },
     );
     for (results, 0..) |result, index| try print_result(out, result, index == results.len - 1);

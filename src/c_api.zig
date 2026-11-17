@@ -249,7 +249,7 @@ pub export fn zslay_conn_init(
     const recv = recv_fn orelse return null;
     const send = send_fn orelse return null;
     const on_frame = on_frame_fn orelse return null;
-    const endpoint_role = types.EndpointRole.fromWire(role) orelse return null;
+    const endpoint_role = types.EndpointRole.from_wire(role) orelse return null;
     if (endpoint_role == .client and gen_mask_fn == null) return null;
 
     const conn_addr = @intFromPtr(zslay_conn);
@@ -547,7 +547,7 @@ pub export fn zslay_conn_prepare_frame(
 
     if (fin > 1 or is_masked > 1) return ResultInvalidArgument;
 
-    const op = types.Opcode.fromWire(opcode) orelse return ResultInvalidArgument;
+    const op = types.Opcode.from_wire(opcode) orelse return ResultInvalidArgument;
     const payload_slice: []const u8 = if (payload_len == 0)
         &.{}
     else blk: {
@@ -564,7 +564,7 @@ pub export fn zslay_conn_prepare_frame(
     }
 
     const masked = is_masked == 1;
-    zslay_conn.conn.validate_outgoing_frame(fin == 1, op, payload_slice, masked) catch |err| {
+    zslay_conn.conn.validate_outgoing_frame_payload(fin == 1, op, payload_slice, masked) catch |err| {
         return map_frame_error(err);
     };
 
