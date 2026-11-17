@@ -48,7 +48,7 @@ GitHub-hosted runner hardware and scheduling vary, so compare results within mat
 
 ## Release Pipeline (`publish.yml`)
 
-Triggered by pushing a semver tag such as `v0.4.5`. Releases are driven by tags, not by pushes to `main`.
+Triggered by pushing a semver tag such as `v0.5.0`. Releases are driven by tags, not by pushes to `main`.
 
 Because we use `flake.nix`, the `build` job runs on `ubuntu-latest` and compiles artifacts for all platforms natively, removing the need for expensive and slow macOS or Windows CI runners.
 
@@ -56,9 +56,9 @@ Because we use `flake.nix`, the `build` job runs on `ubuntu-latest` and compiles
 
 Runs first; `build` and `release` depend on it.
 
-1. Derives the version from the tag (`v0.4.5` becomes `0.4.5`).
+1. Derives the version from the tag (`v0.5.0` becomes `0.5.0`).
 2. Fails the workflow when the tag, the `build.zig.zon` version, and the matching `CHANGELOG.md` section disagree.
-3. Extracts the release notes from the matching `## [0.4.5]` section of `CHANGELOG.md` and uploads them as the `release-notes` artifact.
+3. Extracts the release notes from the matching `## [0.5.0]` section of `CHANGELOG.md` and uploads them as the `release-notes` artifact.
 
 ### Job: `build`
 

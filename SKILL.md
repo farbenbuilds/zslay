@@ -1,6 +1,6 @@
 # Global SKILL.md
 
-This document summarizes the AI agent skills configured for the `zslay` project (version 0.4.5). `AGENT_DIRECTORY.md` is the source of truth for agent ownership and skill coverage.
+This document summarizes the AI agent skills configured for the `zslay` project (version 0.5.0). `AGENT_DIRECTORY.md` is the source of truth for agent ownership and skill coverage.
 
 ## Core Project Skills
 

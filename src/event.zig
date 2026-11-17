@@ -162,7 +162,7 @@ pub const Conn = struct {
 
         try validate_incoming_masking(self.role, decoded.header.mask);
 
-        const op = types.Opcode.fromWire(decoded.header.opcode) orelse return error.InvalidOpcode;
+        const op = types.Opcode.from_wire(decoded.header.opcode) orelse return error.InvalidOpcode;
         if (op.is_control()) return;
 
         switch (op) {
@@ -232,7 +232,7 @@ pub const Conn = struct {
     }
 
     fn commit_fragment_state(self: *Conn, decoded: frame.DecodedHeader) types.Error!void {
-        const op = types.Opcode.fromWire(decoded.header.opcode) orelse return error.InvalidOpcode;
+        const op = types.Opcode.from_wire(decoded.header.opcode) orelse return error.InvalidOpcode;
         if (op.is_control()) return;
 
         switch (op) {
@@ -462,7 +462,7 @@ pub const Conn = struct {
         const payload_len: u64 = @intCast(node.payload.len);
         if (decoded.payload_len != payload_len) return error.InvalidLength;
 
-        const op = types.Opcode.fromWire(decoded.header.opcode) orelse return error.InvalidOpcode;
+        const op = types.Opcode.from_wire(decoded.header.opcode) orelse return error.InvalidOpcode;
         try self.validate_outgoing_frame(decoded.header.fin, op, node.payload, decoded.header.mask);
         if (op.is_control()) return .{ .opcode = op, .fragment = self.tx_fragment };
 

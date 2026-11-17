@@ -202,19 +202,19 @@ test "Types: wire bit offsets and control classification" {
 }
 
 test "Types: wire conversion rejects unknown opcodes and roles" {
-    try testing.expectEqual(root.Opcode.continuation, root.Opcode.fromWire(0x0).?);
-    try testing.expectEqual(root.Opcode.text, root.Opcode.fromWire(0x1).?);
-    try testing.expectEqual(root.Opcode.binary, root.Opcode.fromWire(0x2).?);
-    try testing.expectEqual(root.Opcode.close, root.Opcode.fromWire(0x8).?);
-    try testing.expectEqual(root.Opcode.ping, root.Opcode.fromWire(0x9).?);
-    try testing.expectEqual(root.Opcode.pong, root.Opcode.fromWire(0xa).?);
-    try testing.expectEqual(null, root.Opcode.fromWire(0x3));
+    try testing.expectEqual(root.Opcode.continuation, root.Opcode.from_wire(0x0).?);
+    try testing.expectEqual(root.Opcode.text, root.Opcode.from_wire(0x1).?);
+    try testing.expectEqual(root.Opcode.binary, root.Opcode.from_wire(0x2).?);
+    try testing.expectEqual(root.Opcode.close, root.Opcode.from_wire(0x8).?);
+    try testing.expectEqual(root.Opcode.ping, root.Opcode.from_wire(0x9).?);
+    try testing.expectEqual(root.Opcode.pong, root.Opcode.from_wire(0xa).?);
+    try testing.expectEqual(null, root.Opcode.from_wire(0x3));
     try testing.expect(root.Opcode.close.is_known());
     try testing.expect(!@as(root.Opcode, @fromBackingInt(3)).is_known());
 
-    try testing.expectEqual(root.EndpointRole.client, root.EndpointRole.fromWire(0).?);
-    try testing.expectEqual(root.EndpointRole.server, root.EndpointRole.fromWire(1).?);
-    try testing.expectEqual(null, root.EndpointRole.fromWire(2));
+    try testing.expectEqual(root.EndpointRole.client, root.EndpointRole.from_wire(0).?);
+    try testing.expectEqual(root.EndpointRole.server, root.EndpointRole.from_wire(1).?);
+    try testing.expectEqual(null, root.EndpointRole.from_wire(2));
 }
 
 test "Queue: zero-allocation ring buffer" {

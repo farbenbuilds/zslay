@@ -118,7 +118,7 @@ pub fn encode_header(
     payload_len: u64,
     masking_key: ?types.MaskingKey,
 ) types.Error!usize {
-    const op = types.Opcode.fromWire(header.opcode) orelse return error.InvalidOpcode;
+    const op = types.Opcode.from_wire(header.opcode) orelse return error.InvalidOpcode;
 
     if (header.rsv1) return error.ProtocolError;
     if (header.rsv2) return error.ProtocolError;
@@ -187,7 +187,7 @@ pub fn decode_header(buf: []const u8) types.Error!DecodedHeader {
     if (header.rsv2) return error.ProtocolError;
     if (header.rsv3) return error.ProtocolError;
 
-    const op = types.Opcode.fromWire(header.opcode) orelse return error.InvalidOpcode;
+    const op = types.Opcode.from_wire(header.opcode) orelse return error.InvalidOpcode;
 
     if (op.is_control()) {
         if (!header.fin) return error.ProtocolError;
