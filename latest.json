@@ -4,97 +4,97 @@
     {
       "bytes_per_op": 8,
       "name": "header_encode_masked",
-      "ns_per_op": 0.662,
-      "ops_per_sec": 1510574018.127,
+      "ns_per_op": 1.233,
+      "ops_per_sec": 810865599.027,
       "sample_durations_ns": [
-        67261,
-        66200,
-        66190,
-        66370,
-        66200,
-        66200,
-        66270
+        128954,
+        146166,
+        123315,
+        123314,
+        123314,
+        123325,
+        123334
       ],
       "samples_ns_per_op": [
-        0.673,
-        0.662,
-        0.662,
-        0.664,
-        0.662,
-        0.662,
-        0.663
+        1.29,
+        1.462,
+        1.233,
+        1.233,
+        1.233,
+        1.233,
+        1.233
       ]
     },
     {
       "bytes_per_op": 8,
       "name": "header_decode_masked",
-      "ns_per_op": 0.883,
-      "ops_per_sec": 1132207918.662,
+      "ns_per_op": 9.109,
+      "ops_per_sec": 109783101.526,
       "sample_durations_ns": [
-        88504,
-        88363,
-        88293,
-        88303,
-        88283,
-        95394,
-        88323
+        948786,
+        909855,
+        910887,
+        907831,
+        902252,
+        937946,
+        937465
       ],
       "samples_ns_per_op": [
-        0.885,
-        0.884,
-        0.883,
-        0.883,
-        0.883,
-        0.954,
-        0.883
+        9.488,
+        9.099,
+        9.109,
+        9.078,
+        9.023,
+        9.379,
+        9.375
       ]
     },
     {
       "bytes_per_op": 1024,
       "name": "payload_mask_1024b",
-      "ns_per_op": 15.034,
-      "ops_per_sec": 66517799.831,
+      "ns_per_op": 23.271,
+      "ops_per_sec": 42971717.734,
       "sample_durations_ns": [
-        1481173,
-        1497016,
-        1503357,
-        1508775,
-        1514483,
-        1527393,
-        1501053
+        2717493,
+        2303450,
+        2259790,
+        2327112,
+        2288323,
+        2334987,
+        2328967
       ],
       "samples_ns_per_op": [
-        14.812,
-        14.97,
-        15.034,
-        15.088,
-        15.145,
-        15.274,
-        15.011
+        27.175,
+        23.035,
+        22.598,
+        23.271,
+        22.883,
+        23.35,
+        23.29
       ]
     },
     {
       "bytes_per_op": 136,
       "name": "conn_rx_state_128b",
-      "ns_per_op": 7.899,
-      "ops_per_sec": 126604554.472,
+      "ns_per_op": 25.111,
+      "ops_per_sec": 39823058.188,
       "sample_durations_ns": [
-        795790,
-        789861,
-        789781,
-        783802,
-        832815,
-        796541,
-        788088
+        2511108,
+        2541082,
+        2520585,
+        2560798,
+        2493846,
+        2493105,
+        2494988
       ],
       "samples_ns_per_op": [
-        7.958,
-        7.899,
-        7.898,
-        7.838,
-        8.328,
-        7.965,
-        7.881
+        25.111,
+        25.411,
+        25.206,
+        25.608,
+        24.938,
+        24.931,
+        24.95
       ]
     }
   ],
@@ -103,24 +103,24 @@
     "event": "schedule",
     "repository": "farbenbuilds/zslay",
     "run_attempt": "1",
-    "run_id": "43855656731"
+    "run_id": "44077306613"
   },
   "iterations_per_sample": 100000,
-  "record_id": "43855656731-1-0043f942169a",
-  "recorded_at": "2026-11-16T11:15:17Z",
+  "record_id": "44077306613-1-6f2096d70b34",
+  "recorded_at": "2026-11-17T11:52:10Z",
   "repetitions": 7,
   "runner": {
-    "cpu": "AMD EPYC 9V45 96-Core Processor",
+    "cpu": "AMD EPYC 7763 64-Core Processor",
     "image": "ubuntu26",
     "kernel": "7.0.0-1019-azure",
     "machine": "x86_64"
   },
   "schema_version": 1,
-  "source_sha": "0043f942169a863fda397d293c88eeb33f0837de",
+  "source_sha": "6f2096d70b34a9e2cebbd8749d08eed5ec6cb693",
   "toolchain": {
-    "flake_lock_sha256": "572287d7bf78eddebef3b31c999f7a91d09c5eb85d0f20699081fcc02352d2ba",
+    "flake_lock_sha256": "ad18a9e9aa7c58a7d7ba611320161e83ebf14ca2cc95582f5517d056ed31616f",
     "optimize": "ReleaseFast",
-    "zig": "0.17.0"
+    "zig": "0.17.1"
   },
   "warmup_operations": 10000
 }
