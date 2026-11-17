@@ -7,6 +7,7 @@ model: inherit
 commandExecutionPolicy: sandbox
 skills:
   - skills/codebase-design
+  - skills/untangle-codebase
   - skills/zslay-style
   - skills/ponytail
   - skills/github-git

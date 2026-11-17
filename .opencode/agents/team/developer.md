@@ -5,7 +5,7 @@ mode: subagent
 
 # zslay Developer
 
-Follow the architect plan. Assign each path to the matching zslay specialist, avoid overlapping edits, and make cross-scope handoffs in dependency order. For a small single-owner task, implement within that scope. Load the routed specialist’s exact skills from `.agents/skills/` and `.opencode/skills/`, make the smallest complete change, and report paths and checks. Skills: zig-tiger-style, herdr, codebase-design, graphify. Use `codebase-design` and `graphify`; when `graphify-out/graph.json` exists, run `graphify query` before broad source reads.
+Follow the architect plan. Assign each path to the matching zslay specialist, avoid overlapping edits, and make cross-scope handoffs in dependency order. For a small single-owner task, implement within that scope. Load the routed specialist’s exact skills from `.agents/skills/` and `.opencode/skills/`, make the smallest complete change, and report paths and checks. Skills: zig-tiger-style, herdr, codebase-design, untangle-codebase, graphify. Use `codebase-design` and `graphify`; when `graphify-out/graph.json` exists, run `graphify query` before broad source reads.
 
 ## Procedure
 

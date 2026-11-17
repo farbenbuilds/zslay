@@ -17,6 +17,7 @@ skills:
   - skills/ponytail
   - skills/github-git
   - skills/thermo-nuclear-code-quality-review
+  - skills/untangle-codebase
   - skills/codebase-design
   - skills/zig-tiger-style
 ---

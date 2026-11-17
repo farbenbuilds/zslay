@@ -74,9 +74,8 @@ Any agent kind supported by `herdr agent start --help` (for example `opencode`, 
 Shared project skills live in `.agents/skills/` and are locked by `skills-lock.json`. Platform copies from the graphify installer live in `.opencode/skills/graphify/` and `.codex/skills/graphify/` and are version-stamped by `.graphify_version`. `SKILL.md` is the human-readable catalog; `AGENT_DIRECTORY.md` is the source of truth for agent-to-skill coverage.
 
 - Zig work uses `zig-0-17`, `zig-best-practices`, `zig-testing`, and `zig-tiger-style`. The repository pins Zig 0.17.1 in `flake.nix` and `build.zig.zon`; apply the 0.17 guidance directly. Use TigerStyle for safety ideas such as entry assertions, bounded loops, and compile-time layout invariants, while keeping the repository's `snake_case` naming, 120-column limit, and ABI.
-- Architecture and design work uses `improve-codebase-architecture`, `codebase-design`, `grilling`, `grill-me`, and `domain-modeling`. The architect is read-only; route report and glossary/ADR writes to the developer or `zslay-docs`.
-- Review work uses `thermo-nuclear-code-quality-review` for strict maintainability findings in addition to the repository review checklist.
-- JavaScript and TypeScript tooling under Node bindings uses `install-anti-slop` once `bindings/node/` and an Oxlint configuration exist; the skill is staged until then.
+- Architecture and design work uses `improve-codebase-architecture`, `untangle-codebase`, `codebase-design`, `grilling`, `grill-me`, and `domain-modeling`. The architect is read-only; route implementation, report, and glossary/ADR writes to the developer or `zslay-docs`. The `untangle-codebase` copy removes `disable-model-invocation` so sub-agents can load it; test pruning stays opt-in and the test suite remains the refactor safety net.
+- Review work uses `thermo-nuclear-code-quality-review` for strict maintainability findings and `untangle-codebase` for hidden-link, needless-link, surplus, and special-case findings in addition to the repository review checklist.
 - Codebase questions use `graphify` before raw search when `graphify-out/graph.json` exists.
 - Herdr orchestration uses the `herdr` skill only when the user explicitly asks for Herdr; the skill requires `HERDR_ENV=1` and never replaces the ownership rules above.
 
