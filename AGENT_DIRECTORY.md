@@ -73,7 +73,7 @@ Every repository skill is loaded by at least one agent. The agy agents mirror th
 | `grill-me` | team architect |
 | `domain-modeling` | docs |
 | `thermo-nuclear-code-quality-review` | review, team reviewer |
-| `install-anti-slop` | node-api (staged until `bindings/node/` and Oxlint configuration exist) |
+| `untangle-codebase` | review, team architect, team developer, team reviewer, team integrator |
 
 `zig-0-17` is the active toolchain guidance. The repository pins Zig 0.17.1 in `flake.nix` and `build.zig.zon`; use 0.17 APIs directly.
 
@@ -84,6 +84,8 @@ Every repository skill is loaded by at least one agent. The agy agents mirror th
 The `zig-tiger-style` copy carries a local zslay override for naming and formatting; reapply it if `npx skills update` restores the upstream file.
 
 `grill-me` delegates to `grilling`. `improve-codebase-architecture` uses `codebase-design`, `grilling`, and `domain-modeling`; the read-only architect runs only the exploration and grilling phases and hands report or domain-doc writes to the developer or `zslay-docs`. The architecture and strict-review skills are model-invocable so sub-agents can load them; a future `npx skills update` may restore the upstream `disable-model-invocation` flag and the OpenAI manifest policy.
+
+`untangle-codebase` replaces the staged `install-anti-slop` entry. Its local copy removes `disable-model-invocation` so sub-agents can load it; reapply that frontmatter override after `npx skills update`. The repository applies the core untangle pass plus comment cleanup and keeps test pruning opt-in because the suite is the regression safety net. The read-only architect uses the problem-listing and redesign phases only; implementation belongs to the developer and specialists.
 
 ## Delegation Rules
 
@@ -98,7 +100,7 @@ The `zig-tiger-style` copy carries a local zslay override for naming and formatt
 7. No agent commits, pushes, tags, or opens pull requests unless the user explicitly asks.
 8. Keep core code zero-allocation and I/O-agnostic; the Node-API binding layer is the only place allocation is allowed, and only for Node-owned memory.
 9. For codebase questions, run `graphify query` before raw search when `graphify-out/graph.json` exists. Use `graphify path` and `graphify explain` for relationships and focused concepts, and run `graphify update .` after code changes.
-10. Route architecture sweeps through the architect with `improve-codebase-architecture`, `codebase-design`, and `grilling`; route strict maintainability review through `zslay-review` or the team reviewer with `thermo-nuclear-code-quality-review`. The architect is read-only: report and domain-document writes go to the developer or `zslay-docs`.
+10. Route architecture sweeps through the architect with `improve-codebase-architecture`, `codebase-design`, and `grilling`; route whole-codebase structural refactors through `untangle-codebase`; route strict maintainability review through `zslay-review` or the team reviewer with `thermo-nuclear-code-quality-review`. The architect is read-only: implementation, report, and domain-document writes go to the developer or `zslay-docs`.
 11. agy agents live in `.agents/agents/` and load the same roster from `.agents/skills/`. Start them with `agy --agent zslay-<role>` or the `/agents` picker; for unattended worker panes add `--mode auto`. Herdr starts an agy worker with `--kind agy` and passes `--agent zslay-<role> --mode auto` after `--`.
 
 ## Invoking an Agent

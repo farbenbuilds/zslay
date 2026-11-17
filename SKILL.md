@@ -1,6 +1,6 @@
 # Global SKILL.md
 
-This document summarizes the AI agent skills configured for the `zslay` project (version 0.4.0). `AGENT_DIRECTORY.md` is the source of truth for agent ownership and skill coverage.
+This document summarizes the AI agent skills configured for the `zslay` project (version 0.4.5). `AGENT_DIRECTORY.md` is the source of truth for agent ownership and skill coverage.
 
 ## Core Project Skills
 
@@ -17,12 +17,12 @@ This document summarizes the AI agent skills configured for the `zslay` project 
 - **zig-testing**: Test authoring, test allocators, filters, comptime tests, and fuzz testing.
 - **nix-best-practices**: Nix flakes, overlays, `shell.nix`, and `flake.nix` work.
 - **nix-hermetic**: Hermetic build and CI constraints for the zslay project.
-- **install-anti-slop**: Install and maintain vendored anti-slop Oxlint plugins for JavaScript and TypeScript tooling under the Node bindings. Staged for the future `bindings/node/` tree; do not run the installer until that tree and an Oxlint configuration exist.
 - **graphify**: Query the repository knowledge graph before broad source reads when `graphify-out/graph.json` exists. `graphify` is an optional host tool; install it explicitly with `uv tool install 'graphifyy==0.9.92'` rather than letting an agent install it globally.
 
 ## Architecture and Review Skills
 
 - **improve-codebase-architecture**: Scan the codebase for deepening opportunities and present a visual HTML report. Uses `codebase-design`, `grilling`, and `domain-modeling`.
+- **untangle-codebase**: Untangle the codebase in one pass by listing hidden links, needless links, surplus, and special cases, redesigning from first principles, then refactoring and rechecking. Use for whole-codebase structural refactors; comment cleanup is in scope and test pruning stays opt-in.
 - **codebase-design**: Shared deep-module vocabulary for interfaces, seams, adapters, leverage, and locality.
 - **grilling**: Relentless design-tree interview that stress-tests a plan or decision.
 - **grill-me**: Short user-facing trigger that delegates to `grilling`.
@@ -44,6 +44,7 @@ This document summarizes the AI agent skills configured for the `zslay` project 
 - Codex-specific skills from the graphify installer live in `.codex/skills/graphify/`; the hook is `.codex/hooks.json`, a no-op compatibility hook because graph guidance comes from `AGENTS.md`.
 - `grill-me` delegates to `grilling`. `improve-codebase-architecture` depends on `codebase-design`, `grilling`, and `domain-modeling`; the read-only architect uses only the exploration and grilling phases and hands report or domain-doc writes to the developer or `zslay-docs`.
 - The architecture and strict-review skills are model-invocable so sub-agents can load them. The local edits remove `disable-model-invocation` and the companion OpenAI manifest policy; a future `npx skills update` may restore both, so recheck the frontmatter and `agents/openai.yaml` files.
+- `untangle-codebase` carries its own local frontmatter override that removes `disable-model-invocation`; reapply it after `npx skills update`. The repository applies the core untangle pass plus comment cleanup and keeps test pruning opt-in. The read-only architect uses the problem-listing and redesign phases only; implementation belongs to the developer and specialists.
 - `zig-tiger-style` carries a local zslay override that keeps `snake_case`, the 120-column limit, and the C ABI. Reapply that override after an upstream `npx skills update`.
 - `.agents/skills/herdr/SKILL.md` is generated with `herdr --skill`; regenerate it after upgrading Herdr and recompute the lock hash.
 
@@ -56,15 +57,15 @@ This document summarizes the AI agent skills configured for the `zslay` project 
 | `zslay-parser` | Pure parser core (`src/types.zig`, `src/frame.zig`, `src/queue.zig`) | zslay-style, zslay-dod, dod, wslay-porting, Pragmatic Functional Programming, zig-0-17, zig-best-practices, zig-tiger-style, graphify |
 | `zslay-event-loop` | RX/TX state machine (`src/event.zig`) | zslay-style, zslay-dod, dod, Pragmatic Functional Programming, zig-0-17, zig-best-practices, zig-tiger-style, graphify |
 | `zslay-c-abi` | C exports and header (`src/c_api.zig`, `include/zslay.h`) | zslay-c-ffi, zslay-style, zig-0-17, zig-best-practices, zig-tiger-style, graphify |
-| `zslay-node-api` | Node-API bindings (`bindings/node/`) | zslay-c-ffi, nix-hermetic, nix-best-practices, zig-0-17, zig-best-practices, zig-tiger-style, context7, install-anti-slop, graphify |
+| `zslay-node-api` | Node-API bindings (`bindings/node/`) | zslay-c-ffi, nix-hermetic, nix-best-practices, zig-0-17, zig-best-practices, zig-tiger-style, context7, graphify |
 | `zslay-testing` | Test suite (`src/test.zig`) | zig-testing, zslay-style, zslay-dod, zig-0-17, zig-best-practices, zig-tiger-style, graphify |
-| `zslay-review` | Read-only review of changed files | zslay-style, zslay-dod, zslay-c-ffi, Pragmatic Functional Programming, ponytail, github-git, thermo-nuclear-code-quality-review, codebase-design, zig-tiger-style, graphify |
+| `zslay-review` | Read-only review of changed files | zslay-style, zslay-dod, zslay-c-ffi, Pragmatic Functional Programming, ponytail, github-git, thermo-nuclear-code-quality-review, untangle-codebase, codebase-design, zig-tiger-style, graphify |
 | `zslay-release` | Build, packaging, CI (`build.zig`, `flake.nix`, `.github/`) | nix-hermetic, nix-best-practices, github-git, ponytail, graphify |
 | `zslay-docs` | Documentation (root `*.md` guides) | github-git, caveman, ponytail, context7, domain-modeling, graphify |
-| `team/architect` | Read-only planning and ownership routing | Pragmatic Functional Programming, ponytail, zslay-style, improve-codebase-architecture, codebase-design, grilling, grill-me, zig-tiger-style, herdr, graphify |
-| `team/developer` | Implementation coordination | matched specialist skills, codebase-design, zig-tiger-style, herdr, graphify |
-| `team/reviewer` | Read-only quality gate | zslay-style, zslay-dod, zslay-c-ffi, Pragmatic Functional Programming, ponytail, github-git, thermo-nuclear-code-quality-review, codebase-design, zig-tiger-style, graphify |
-| `team/integrator` | Resolve findings and final verification | github-git, ponytail, zslay-style, codebase-design, zig-tiger-style, herdr, graphify |
+| `team/architect` | Read-only planning and ownership routing | Pragmatic Functional Programming, ponytail, zslay-style, improve-codebase-architecture, untangle-codebase, codebase-design, grilling, grill-me, zig-tiger-style, herdr, graphify |
+| `team/developer` | Implementation coordination | matched specialist skills, codebase-design, untangle-codebase, zig-tiger-style, herdr, graphify |
+| `team/reviewer` | Read-only quality gate | zslay-style, zslay-dod, zslay-c-ffi, Pragmatic Functional Programming, ponytail, github-git, thermo-nuclear-code-quality-review, untangle-codebase, codebase-design, zig-tiger-style, graphify |
+| `team/integrator` | Resolve findings and final verification | github-git, ponytail, zslay-style, codebase-design, untangle-codebase, zig-tiger-style, herdr, graphify |
 
 agy uses the hyphenated names `zslay-parser`, `zslay-event-loop`, `zslay-c-abi`, `zslay-node-api`, `zslay-testing`, `zslay-review`, `zslay-release`, and `zslay-docs`, plus the team roles `zslay-architect`, `zslay-developer`, `zslay-reviewer`, and `zslay-integrator`.
 

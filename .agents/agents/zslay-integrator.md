@@ -10,6 +10,7 @@ skills:
   - skills/ponytail
   - skills/zslay-style
   - skills/codebase-design
+  - skills/untangle-codebase
   - skills/zig-tiger-style
   - skills/herdr
 ---

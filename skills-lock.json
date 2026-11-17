@@ -61,12 +61,6 @@
       "skillPath": "skills/engineering/improve-codebase-architecture/SKILL.md",
       "computedHash": "fb5133771cd38e153609a6ab58e34cf100d81fa6852197cfc5deaaa3a0bf2ab9"
     },
-    "install-anti-slop": {
-      "source": "dmmulroy/anti-slop",
-      "sourceType": "github",
-      "skillPath": "skills/install-anti-slop/SKILL.md",
-      "computedHash": "cc20d2e0d7845d08b485a196cf94f12071fef61f375d80b3e1e9d9771c789c8a"
-    },
     "nix-best-practices": {
       "source": "0xbigboss/claude-code",
       "sourceType": "github",
@@ -84,6 +78,13 @@
       "sourceType": "github",
       "skillPath": "cursor-team-kit/skills/thermo-nuclear-code-quality-review/SKILL.md",
       "computedHash": "9c42ee2eb72366736c00e5537fdff64f8ac1c0c57f92604d9c6557500c7778ca"
+    },
+    "untangle-codebase": {
+      "source": "caldoai/skills",
+      "commit": "2e157218049708bf337717847bc1b2a971203e3f",
+      "sourceType": "github",
+      "skillPath": "skills/untangle-codebase/SKILL.md",
+      "computedHash": "73791c30d4da2e001bc095732771966338b764e2e7b57bb30a81439cff85aef4"
     },
     "zig-0-17": {
       "source": "zigcc/skills",

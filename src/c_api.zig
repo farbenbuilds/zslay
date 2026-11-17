@@ -79,9 +79,10 @@ const ZslayConn = struct {
     tx_chunk_start: usize = 0,
     tx_chunk_sent: usize = 0,
 
-    rx_stage: types.FrameHeaderBuffer = undefined,
-    rx_stage_len: usize = 0,
-    rx_stage_off: usize = 0,
+    // Coalesces the next header and any payload bytes that arrive in the same read.
+    rx_prefix: types.FrameHeaderBuffer = undefined,
+    rx_prefix_len: usize = 0,
+    rx_prefix_off: usize = 0,
     rx_chunk_start: usize = 0,
     rx_chunk_len: usize = 0,
 };
@@ -109,46 +110,15 @@ fn invalidate(zslay_conn: *ZslayConn) void {
     zslay_conn.abi_version = 0;
 }
 
-fn ranges_overlap(a_start: usize, a_len: usize, b_start: usize, b_len: usize) bool {
-    if (a_len == 0 or b_len == 0) return false;
-
-    const a_end = std.math.add(usize, a_start, a_len) catch return true;
-    const b_end = std.math.add(usize, b_start, b_len) catch return true;
-    return a_start < b_end and b_start < a_end;
-}
-
 fn frame_entry_allowed(zslay_conn: *const ZslayConn) bool {
     return callback_depth == 0 or zslay_conn.callback_state == .on_frame;
 }
 
 fn range_overlaps_conn_or_rx(zslay_conn: *const ZslayConn, start: usize, len: usize) bool {
     if (len == 0) return false;
-    if (ranges_overlap(start, len, @intFromPtr(zslay_conn), @sizeOf(ZslayConn))) return true;
+    if (event.ranges_overlap(start, len, @intFromPtr(zslay_conn), @sizeOf(ZslayConn))) return true;
     return zslay_conn.rx_chunk_len != 0 and
-        ranges_overlap(start, len, zslay_conn.rx_chunk_start, zslay_conn.rx_chunk_len);
-}
-
-fn range_overlaps_tx_ring(zslay_conn: *const ZslayConn, start: usize, len: usize) bool {
-    if (len == 0) return false;
-    const tx_buffer = zslay_conn.conn.tx_queue.buffer;
-    if (tx_buffer.len == 0) return false;
-
-    const tx_len = std.math.mul(usize, tx_buffer.len, @sizeOf(event.FrameNode)) catch return true;
-    return ranges_overlap(start, len, @intFromPtr(tx_buffer.ptr), tx_len);
-}
-
-fn tx_node_is_queued(zslay_conn: *const ZslayConn, start: usize, len: usize) bool {
-    const tx = &zslay_conn.conn.tx_queue;
-    if (tx.len == 0) return false;
-
-    var index = tx.head;
-    for (0..tx.len) |_| {
-        const slot_start = @intFromPtr(&tx.buffer[index]);
-        if (ranges_overlap(start, len, slot_start, @sizeOf(event.FrameNode))) return true;
-        index += 1;
-        if (index == tx.buffer.len) index = 0;
-    }
-    return false;
+        event.ranges_overlap(start, len, zslay_conn.rx_chunk_start, zslay_conn.rx_chunk_len);
 }
 
 fn clear_tx_chunk(zslay_conn: *ZslayConn) void {
@@ -158,10 +128,10 @@ fn clear_tx_chunk(zslay_conn: *ZslayConn) void {
     zslay_conn.tx_chunk_sent = 0;
 }
 
-fn clear_rx_stage(zslay_conn: *ZslayConn) void {
-    if (zslay_conn.rx_stage_len != 0) @memset(zslay_conn.rx_stage[0..zslay_conn.rx_stage_len], 0);
-    zslay_conn.rx_stage_len = 0;
-    zslay_conn.rx_stage_off = 0;
+fn clear_rx_prefix(zslay_conn: *ZslayConn) void {
+    if (zslay_conn.rx_prefix_len != 0) @memset(zslay_conn.rx_prefix[0..zslay_conn.rx_prefix_len], 0);
+    zslay_conn.rx_prefix_len = 0;
+    zslay_conn.rx_prefix_off = 0;
     zslay_conn.rx_chunk_start = 0;
     zslay_conn.rx_chunk_len = 0;
 }
@@ -225,26 +195,6 @@ fn call_on_frame(
     );
 }
 
-fn parse_opcode(raw: u8) ?types.Opcode {
-    return switch (raw) {
-        0x0 => .continuation,
-        0x1 => .text,
-        0x2 => .binary,
-        0x8 => .close,
-        0x9 => .ping,
-        0xa => .pong,
-        else => null,
-    };
-}
-
-fn parse_role(raw: u8) ?types.EndpointRole {
-    return switch (raw) {
-        0 => .client,
-        1 => .server,
-        else => null,
-    };
-}
-
 fn map_frame_error(err: anyerror) c_int {
     return switch (err) {
         error.PayloadTooLarge,
@@ -260,7 +210,6 @@ fn map_frame_error(err: anyerror) c_int {
     };
 }
 
-// Returns the size and alignment required for caller-owned connection storage
 pub export fn zslay_conn_get_size() usize {
     return @sizeOf(ZslayConn);
 }
@@ -269,7 +218,6 @@ pub export fn zslay_conn_get_align() usize {
     return @alignOf(ZslayConn);
 }
 
-// Returns the size and alignment required for one outgoing frame node
 pub export fn zslay_frame_node_get_size() usize {
     return @sizeOf(event.FrameNode);
 }
@@ -282,7 +230,6 @@ pub export fn zslay_abi_version() u32 {
     return AbiVersion;
 }
 
-// Initializes caller-owned connection state with mandatory role and limits
 pub export fn zslay_conn_init(
     mem: ?*anyopaque,
     user_data: ?*anyopaque,
@@ -302,7 +249,7 @@ pub export fn zslay_conn_init(
     const recv = recv_fn orelse return null;
     const send = send_fn orelse return null;
     const on_frame = on_frame_fn orelse return null;
-    const endpoint_role = parse_role(role) orelse return null;
+    const endpoint_role = types.EndpointRole.fromWire(role) orelse return null;
     if (endpoint_role == .client and gen_mask_fn == null) return null;
 
     const conn_addr = @intFromPtr(zslay_conn);
@@ -313,7 +260,7 @@ pub export fn zslay_conn_init(
         const tx_mem = tx_buffer orelse return null;
         const tx_addr = @intFromPtr(tx_mem);
         if (tx_addr % @alignOf(event.FrameNode) != 0) return null;
-        if (ranges_overlap(conn_addr, @sizeOf(ZslayConn), tx_addr, tx_bytes)) return null;
+        if (event.ranges_overlap(conn_addr, @sizeOf(ZslayConn), tx_addr, tx_bytes)) return null;
 
         const tx_nodes_ptr: [*]event.FrameNode = @ptrCast(@alignCast(tx_mem));
         tx_nodes = tx_nodes_ptr[0..tx_node_count];
@@ -348,7 +295,7 @@ pub export fn zslay_conn_deinit(conn_ptr: ?*anyopaque) c_int {
     zslay_conn.conn.reset_rx();
     zslay_conn.conn.reset_tx();
     clear_tx_chunk(zslay_conn);
-    clear_rx_stage(zslay_conn);
+    clear_rx_prefix(zslay_conn);
     invalidate(zslay_conn);
     return ResultOk;
 }
@@ -368,39 +315,38 @@ pub export fn zslay_conn_recv(conn_ptr: ?*anyopaque) c_int {
                 const buf = conn.get_header_buffer();
                 if (buf.len == 0) return ResultProtocolError;
 
-                if (zslay_conn.rx_stage_off == zslay_conn.rx_stage_len) {
-                    const read = call_recv(zslay_conn, &zslay_conn.rx_stage, zslay_conn.rx_stage.len);
+                if (zslay_conn.rx_prefix_off == zslay_conn.rx_prefix_len) {
+                    const read = call_recv(zslay_conn, &zslay_conn.rx_prefix, zslay_conn.rx_prefix.len);
                     if (read < 0) return ResultCallbackError;
                     if (read == 0) return if (progressed) ResultProgress else ResultOk;
 
                     const read_len: usize = @intCast(read);
-                    if (read_len > zslay_conn.rx_stage.len) return ResultCallbackError;
-                    zslay_conn.rx_stage_len = read_len;
-                    zslay_conn.rx_stage_off = 0;
+                    if (read_len > zslay_conn.rx_prefix.len) return ResultCallbackError;
+                    zslay_conn.rx_prefix_len = read_len;
+                    zslay_conn.rx_prefix_off = 0;
                 }
 
-                const staged = zslay_conn.rx_stage[zslay_conn.rx_stage_off..zslay_conn.rx_stage_len];
+                const staged = zslay_conn.rx_prefix[zslay_conn.rx_prefix_off..zslay_conn.rx_prefix_len];
                 const copy_len = @min(buf.len, staged.len);
                 @memcpy(buf[0..copy_len], staged[0..copy_len]);
-                zslay_conn.rx_stage_off += copy_len;
+                zslay_conn.rx_prefix_off += copy_len;
                 conn.advance_header_read(copy_len) catch return ResultProtocolError;
                 progressed = true;
                 action = conn.advance_rx() catch return ResultProtocolError;
             },
             .need_payload => {
-                const decoded = conn.decoded_header orelse return ResultProtocolError;
-                if (conn.payload_bytes_processed > decoded.payload_len) return ResultProtocolError;
-                const remaining: u64 = decoded.payload_len - conn.payload_bytes_processed;
+                const decoded = conn.current_frame() catch return ResultProtocolError;
+                const remaining = conn.rx_remaining() catch return ResultProtocolError;
 
                 var chunk_buf: ChunkBuffer = undefined;
                 const chunk_size: usize = @intCast(@min(chunk_buf.len, remaining));
                 var chunk_len: usize = 0;
 
-                if (zslay_conn.rx_stage_off < zslay_conn.rx_stage_len) {
-                    const staged = zslay_conn.rx_stage[zslay_conn.rx_stage_off..zslay_conn.rx_stage_len];
+                if (zslay_conn.rx_prefix_off < zslay_conn.rx_prefix_len) {
+                    const staged = zslay_conn.rx_prefix[zslay_conn.rx_prefix_off..zslay_conn.rx_prefix_len];
                     chunk_len = @min(chunk_size, staged.len);
                     @memcpy(chunk_buf[0..chunk_len], staged[0..chunk_len]);
-                    zslay_conn.rx_stage_off += chunk_len;
+                    zslay_conn.rx_prefix_off += chunk_len;
                 }
 
                 if (chunk_len < chunk_size) {
@@ -417,7 +363,7 @@ pub export fn zslay_conn_recv(conn_ptr: ?*anyopaque) c_int {
 
                 if (chunk_len == 0) return if (progressed) ResultProgress else ResultOk;
 
-                const payload_offset = conn.payload_bytes_processed;
+                const payload_offset = decoded.payload_len - remaining;
                 const read_len_u64: u64 = @intCast(chunk_len);
                 const end_of_frame = read_len_u64 == remaining;
 
@@ -442,7 +388,7 @@ pub export fn zslay_conn_recv(conn_ptr: ?*anyopaque) c_int {
                 return ResultProgress;
             },
             .emit_frame => {
-                const decoded = conn.decoded_header orelse return ResultProtocolError;
+                const decoded = conn.current_frame() catch return ResultProtocolError;
                 call_on_frame(
                     zslay_conn,
                     @intCast(decoded.header.opcode),
@@ -553,17 +499,15 @@ pub export fn zslay_conn_send(conn_ptr: ?*anyopaque) c_int {
     }
 }
 
-// Abandons receive state, including any active fragmented message
 pub export fn zslay_conn_reset(conn_ptr: ?*anyopaque) c_int {
     const zslay_conn = as_conn(conn_ptr) orelse return ResultInvalidArgument;
     if (callback_depth != 0 or zslay_conn.callback_state != .none) return ResultReentrant;
 
     zslay_conn.conn.reset_rx();
-    clear_rx_stage(zslay_conn);
+    clear_rx_prefix(zslay_conn);
     return ResultOk;
 }
 
-// Drops queued transmit frames and any open transmit fragment
 pub export fn zslay_conn_reset_tx(conn_ptr: ?*anyopaque) c_int {
     const zslay_conn = as_conn(conn_ptr) orelse return ResultInvalidArgument;
     if (callback_depth != 0 or zslay_conn.callback_state != .none) return ResultReentrant;
@@ -582,7 +526,6 @@ pub export fn zslay_conn_tx_pending(conn_ptr: ?*anyopaque, pending: ?*usize) c_i
     return ResultOk;
 }
 
-// Serializes a validated frame into caller-owned node storage
 pub export fn zslay_conn_prepare_frame(
     conn_ptr: ?*anyopaque,
     node_ptr: ?*anyopaque,
@@ -599,12 +542,12 @@ pub export fn zslay_conn_prepare_frame(
     const node_start = @intFromPtr(node);
     const node_len = @sizeOf(event.FrameNode);
     if (range_overlaps_conn_or_rx(zslay_conn, node_start, node_len) or
-        tx_node_is_queued(zslay_conn, node_start, node_len))
+        zslay_conn.conn.tx_pending_overlaps(node_start, node_len))
         return ResultInvalidArgument;
 
     if (fin > 1 or is_masked > 1) return ResultInvalidArgument;
 
-    const op = parse_opcode(opcode) orelse return ResultInvalidArgument;
+    const op = types.Opcode.fromWire(opcode) orelse return ResultInvalidArgument;
     const payload_slice: []const u8 = if (payload_len == 0)
         &.{}
     else blk: {
@@ -615,19 +558,15 @@ pub export fn zslay_conn_prepare_frame(
     if (payload_slice.len != 0) {
         const payload_start = @intFromPtr(payload_slice.ptr);
         if (range_overlaps_conn_or_rx(zslay_conn, payload_start, payload_slice.len) or
-            range_overlaps_tx_ring(zslay_conn, payload_start, payload_slice.len) or
-            ranges_overlap(payload_start, payload_slice.len, node_start, node_len))
+            zslay_conn.conn.tx_storage_overlaps(payload_start, payload_slice.len) or
+            event.ranges_overlap(payload_start, payload_slice.len, node_start, node_len))
             return ResultInvalidArgument;
     }
 
     const masked = is_masked == 1;
-    zslay_conn.conn.validate_outgoing_frame(fin == 1, op, @intCast(payload_slice.len), masked) catch |err| {
+    zslay_conn.conn.validate_outgoing_frame(fin == 1, op, payload_slice, masked) catch |err| {
         return map_frame_error(err);
     };
-
-    if (op == .close) {
-        frame.validate_close_payload(payload_slice) catch |err| return map_frame_error(err);
-    }
 
     var masking_key: ?types.MaskingKey = null;
     if (masked) {
@@ -648,7 +587,6 @@ pub export fn zslay_conn_prepare_frame(
     return ResultOk;
 }
 
-// Validates and appends a pre-serialized frame node to the TX queue
 pub export fn zslay_conn_queue_frame(
     conn_ptr: ?*anyopaque,
     node_ptr: ?*anyopaque,
@@ -660,15 +598,15 @@ pub export fn zslay_conn_queue_frame(
     const node_start = @intFromPtr(node);
     const node_len = @sizeOf(event.FrameNode);
     if (range_overlaps_conn_or_rx(zslay_conn, node_start, node_len) or
-        tx_node_is_queued(zslay_conn, node_start, node_len))
+        zslay_conn.conn.tx_pending_overlaps(node_start, node_len))
         return ResultInvalidArgument;
 
     if (node.payload.len != 0) {
         const payload_start = @intFromPtr(node.payload.ptr);
         if (payload_start == 0) return ResultInvalidArgument;
         if (range_overlaps_conn_or_rx(zslay_conn, payload_start, node.payload.len) or
-            range_overlaps_tx_ring(zslay_conn, payload_start, node.payload.len) or
-            ranges_overlap(payload_start, node.payload.len, node_start, node_len))
+            zslay_conn.conn.tx_storage_overlaps(payload_start, node.payload.len) or
+            event.ranges_overlap(payload_start, node.payload.len, node_start, node_len))
             return ResultInvalidArgument;
     }
 
@@ -679,7 +617,6 @@ pub export fn zslay_conn_queue_frame(
     return ResultOk;
 }
 
-// Validates a close frame payload code and UTF-8 reason
 pub export fn zslay_validate_close_payload(payload: ?[*]const u8, payload_len: usize) c_int {
     if (payload_len == 0) return ResultOk;
 

@@ -12,7 +12,6 @@ skills:
   - skills/zig-0-17
   - skills/zig-best-practices
   - skills/context7
-  - skills/install-anti-slop
   - skills/zig-tiger-style
 ---
 
@@ -35,7 +34,6 @@ Never reach into `src/` internals or reimplement parsing in JavaScript. If the C
 - Keep callback-driven receive/transmit loops bounded per tick; never block the event loop.
 - Match the C ABI's role and limit validation; fail closed on missing mask generation.
 - Do not add runtime dependencies outside the Nix shell; pin dev tooling.
-- Do not run the `install-anti-slop` installer until `bindings/node/` and an Oxlint configuration exist.
 
 ## Workflow
 

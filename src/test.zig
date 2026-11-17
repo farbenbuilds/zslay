@@ -65,6 +65,7 @@ const CApiHarness = struct {
     reply_node: root.FrameNode = .{},
     recv_calls: usize = 0,
     send_calls: usize = 0,
+    mask_calls: usize = 0,
 
     mask_result: c_int = 0,
     mask_key: root.MaskingKey = .{ 1, 2, 3, 4 },
@@ -158,6 +159,7 @@ const CApiHarness = struct {
 
     fn gen_mask(buf: [*]u8, len: usize, user_data: ?*anyopaque) callconv(.c) c_int {
         const self = from_user_data(user_data);
+        self.mask_calls += 1;
         if (self.mask_result != 0) return self.mask_result;
         if (len != self.mask_key.len) return -1;
 
@@ -197,6 +199,22 @@ test "Types: wire bit offsets and control classification" {
     try testing.expect(!root.Opcode.text.is_control());
     try testing.expect(!root.Opcode.binary.is_control());
     try testing.expect(!@as(root.Opcode, @fromBackingInt(3)).is_control());
+}
+
+test "Types: wire conversion rejects unknown opcodes and roles" {
+    try testing.expectEqual(root.Opcode.continuation, root.Opcode.fromWire(0x0).?);
+    try testing.expectEqual(root.Opcode.text, root.Opcode.fromWire(0x1).?);
+    try testing.expectEqual(root.Opcode.binary, root.Opcode.fromWire(0x2).?);
+    try testing.expectEqual(root.Opcode.close, root.Opcode.fromWire(0x8).?);
+    try testing.expectEqual(root.Opcode.ping, root.Opcode.fromWire(0x9).?);
+    try testing.expectEqual(root.Opcode.pong, root.Opcode.fromWire(0xa).?);
+    try testing.expectEqual(null, root.Opcode.fromWire(0x3));
+    try testing.expect(root.Opcode.close.is_known());
+    try testing.expect(!@as(root.Opcode, @fromBackingInt(3)).is_known());
+
+    try testing.expectEqual(root.EndpointRole.client, root.EndpointRole.fromWire(0).?);
+    try testing.expectEqual(root.EndpointRole.server, root.EndpointRole.fromWire(1).?);
+    try testing.expectEqual(null, root.EndpointRole.fromWire(2));
 }
 
 test "Queue: zero-allocation ring buffer" {
@@ -376,26 +394,34 @@ test "Frame: encode derives the wire marker from the payload length" {
         .mask = false,
     };
 
-    try testing.expectError(error.ProtocolError, root.encode_header(&buf, short_header, 70000, null));
-    try testing.expectEqualSlices(u8, &@as([16]u8, @splat(0xa5)), &buf);
+    try testing.expectEqual(2, try root.encode_header(&buf, short_header, 5, null));
+    try testing.expectEqual(@as(u8, 5), buf[1] & 0x7f);
+
+    buf = @splat(0xa5);
+    try testing.expectEqual(4, try root.encode_header(&buf, short_header, 126, null));
+    try testing.expectEqual(@as(u8, 126), buf[1] & 0x7f);
+
+    buf = @splat(0xa5);
+    try testing.expectEqual(10, try root.encode_header(&buf, short_header, 70000, null));
+    try testing.expectEqual(@as(u8, 127), buf[1] & 0x7f);
 
     var ping_header = short_header;
     ping_header.opcode = @backingInt(root.Opcode.ping);
-    ping_header.payload_len = 0;
+    buf = @splat(0xa5);
     try testing.expectError(error.ProtocolError, root.encode_header(&buf, ping_header, 1000, null));
-
-    try testing.expectEqual(2, try root.encode_header(&buf, short_header, 5, null));
-    try testing.expectEqual(@as(u8, 5), buf[1] & 0x7f);
+    try testing.expectEqualSlices(u8, &@as([16]u8, @splat(0xa5)), &buf);
 
     var masked = short_header;
     masked.mask = true;
     try testing.expectError(error.MaskingKeyRequired, root.encode_header(&buf, masked, 5, null));
     try testing.expectError(error.ProtocolError, root.encode_header(&buf, short_header, 5, key));
 
-    var empty_header = short_header;
-    empty_header.payload_len = 0;
+    var short_buf: [2]u8 = @splat(0xa5);
+    try testing.expectError(error.BufferTooShort, root.encode_header(&short_buf, short_header, 126, null));
+    try testing.expectEqualSlices(u8, &[_]u8{ 0xa5, 0xa5 }, &short_buf);
+
     var empty: [0]u8 = .{};
-    try testing.expectError(error.BufferTooShort, root.encode_header(&empty, empty_header, 0, null));
+    try testing.expectError(error.BufferTooShort, root.encode_header(&empty, short_header, 0, null));
 }
 
 test "Frame: masking matches a byte-wise reference at every offset" {
@@ -454,7 +480,7 @@ test "Connection: stream extended headers before payload" {
     try testing.expectEqual(root.RxAction.need_payload, try load_header(&conn, &[_]u8{ 0x00, 0x80 }));
 }
 
-test "Frame: reject inconsistent extended length markers before writing" {
+test "Frame: encode ignores caller markers and writes canonical lengths" {
     const base = root.FrameHeader{
         .opcode = @backingInt(root.Opcode.binary),
         .rsv3 = false,
@@ -465,23 +491,25 @@ test "Frame: reject inconsistent extended length markers before writing" {
         .mask = false,
     };
 
+    var buf: [16]u8 = undefined;
+    try testing.expectEqual(2, try root.encode_header(&buf, base, 125, null));
+    try testing.expectEqual(@as(u8, 125), buf[1] & 0x7f);
+
+    try testing.expectEqual(4, try root.encode_header(&buf, base, 126, null));
+    try testing.expectEqual(@as(u8, 126), buf[1] & 0x7f);
+
+    try testing.expectEqual(4, try root.encode_header(&buf, base, 65535, null));
+    try testing.expectEqual(@as(u8, 126), buf[1] & 0x7f);
+
+    try testing.expectEqual(10, try root.encode_header(&buf, base, 65536, null));
+    try testing.expectEqual(@as(u8, 127), buf[1] & 0x7f);
+
+    try testing.expectEqual(10, try root.encode_header(&buf, base, root.MaxPayloadLen, null));
+    try testing.expectEqual(@as(u8, 127), buf[1] & 0x7f);
+
     var short_buf: [2]u8 = @splat(0xa5);
-    try testing.expectError(error.ProtocolError, root.encode_header(&short_buf, base, 125, null));
+    try testing.expectError(error.InvalidLength, root.encode_header(&short_buf, base, 1 << 63, null));
     try testing.expectEqualSlices(u8, &[_]u8{ 0xa5, 0xa5 }, &short_buf);
-
-    var marker_127 = base;
-    marker_127.payload_len = 127;
-    try testing.expectError(error.ProtocolError, root.encode_header(&short_buf, marker_127, 65535, null));
-    try testing.expectEqualSlices(u8, &[_]u8{ 0xa5, 0xa5 }, &short_buf);
-    try testing.expectError(error.InvalidLength, root.encode_header(&short_buf, marker_127, 1 << 63, null));
-
-    var exact_126: [4]u8 = undefined;
-    try testing.expectEqual(4, try root.encode_header(&exact_126, base, 126, null));
-    try testing.expectEqual(4, try root.encode_header(&exact_126, base, 65535, null));
-
-    var exact_127: [10]u8 = undefined;
-    try testing.expectEqual(10, try root.encode_header(&exact_127, marker_127, 65536, null));
-    try testing.expectEqual(10, try root.encode_header(&exact_127, marker_127, root.MaxPayloadLen, null));
 }
 
 test "Frame: decode canonical payload length boundaries" {
@@ -639,6 +667,25 @@ test "Connection: fail closed for masking keys and outbound direction" {
     );
 }
 
+test "Connection: reject invalid close payloads on prepare and queue" {
+    var nodes: [2]root.FrameNode = undefined;
+    var conn = try init_conn(&nodes, .server, 1024, 1024);
+
+    try testing.expectError(error.ProtocolError, conn.prepare_frame(true, .close, &[_]u8{0x03}, false, null));
+
+    var invalid_code = [_]u8{ 0x03, 0xEC };
+    try testing.expectError(error.ProtocolError, conn.prepare_frame(true, .close, &invalid_code, false, null));
+
+    var invalid_utf8 = [_]u8{ 0x03, 0xE8, 0xff };
+    try testing.expectError(error.InvalidUtf8, conn.prepare_frame(true, .close, &invalid_utf8, false, null));
+
+    var payload = [_]u8{ 0x03, 0xE8, 'o', 'k' };
+    const node = try conn.prepare_frame(true, .close, &payload, false, null);
+    payload[2] = 0xff;
+    try testing.expectError(error.InvalidUtf8, conn.queue_frame(node));
+    try testing.expectEqual(@as(usize, 0), conn.tx_pending());
+}
+
 test "Connection: empty transmit queue is safe" {
     var no_nodes: [0]root.FrameNode = .{};
     var conn = try init_conn(&no_nodes, .server, 1024, 1024);
@@ -712,6 +759,38 @@ test "Connection: transmit accessors expose payload progress and masking" {
     const masked = try client.prepare_frame(true, .binary, "abc", true, key);
     try client.queue_frame(masked);
     try testing.expectEqual(key, (try client.get_tx_masking_key()).?);
+}
+
+test "Connection: accessors expose RX progress and TX overlap" {
+    var tx_nodes: [2]root.FrameNode = undefined;
+    var conn = try init_conn(&tx_nodes, .server, 1024, 1024);
+
+    const header = [_]u8{ 0x81, 0x83, 1, 2, 3, 4 };
+    try testing.expectEqual(root.RxAction.need_payload, try load_header(&conn, &header));
+    const decoded = try conn.current_frame();
+    try testing.expectEqual(@as(u64, 3), decoded.payload_len);
+    try testing.expectEqual(@as(u64, 3), try conn.rx_remaining());
+
+    try conn.advance_payload_read(1);
+    try testing.expectEqual(@as(u64, 2), try conn.rx_remaining());
+
+    try testing.expect(!conn.tx_pending_overlaps(@intFromPtr(&tx_nodes[0]), @sizeOf(root.FrameNode)));
+    try testing.expect(conn.tx_storage_overlaps(@intFromPtr(&tx_nodes[0]), @sizeOf(root.FrameNode)));
+
+    const node = try conn.prepare_frame(true, .text, "x", false, null);
+    try conn.queue_frame(node);
+    try testing.expect(conn.tx_pending_overlaps(@intFromPtr(&tx_nodes[0]), @sizeOf(root.FrameNode)));
+    try testing.expect(!conn.tx_pending_overlaps(@intFromPtr(&tx_nodes[1]), @sizeOf(root.FrameNode)));
+
+    tx_nodes[0].header_sent = tx_nodes[0].header_len;
+    tx_nodes[0].payload_sent = tx_nodes[0].payload.len;
+    try testing.expectEqual(null, conn.advance_tx());
+    try testing.expect(!conn.tx_pending_overlaps(@intFromPtr(&tx_nodes[0]), @sizeOf(root.FrameNode)));
+    try testing.expect(conn.tx_storage_overlaps(@intFromPtr(&tx_nodes[0]), @sizeOf(root.FrameNode)));
+
+    conn.reset_rx();
+    try testing.expectError(error.ProtocolError, conn.current_frame());
+    try testing.expectError(error.ProtocolError, conn.rx_remaining());
 }
 
 test "Connection: reset_tx clears queued frames and fragment state" {
@@ -1314,6 +1393,81 @@ test "C API: prepare_frame maps close and direction errors" {
     try testing.expectEqual(c_api.ResultProtocolError, c_api.zslay_conn_queue_frame(conn, &node));
 }
 
+test "C API: queued transmit slot rejects node reuse" {
+    var harness = CApiHarness{};
+    var conn_mem: [8192]u8 align(64) = undefined;
+    var tx_nodes: [2]root.FrameNode = undefined;
+
+    const conn_opt = c_api.zslay_conn_init(
+        &conn_mem,
+        &harness,
+        CApiHarness.recv,
+        CApiHarness.send,
+        CApiHarness.on_frame,
+        null,
+        &tx_nodes,
+        tx_nodes.len,
+        @backingInt(root.EndpointRole.server),
+        1024,
+        1024,
+    );
+    try testing.expect(conn_opt != null);
+    const conn = conn_opt.?;
+    const text = @backingInt(root.Opcode.text);
+
+    try testing.expectEqual(
+        c_api.ResultOk,
+        c_api.zslay_conn_prepare_frame(conn, &tx_nodes[0], 1, text, null, 0, 0),
+    );
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_queue_frame(conn, &tx_nodes[0]));
+
+    try testing.expectEqual(
+        c_api.ResultInvalidArgument,
+        c_api.zslay_conn_prepare_frame(conn, &tx_nodes[0], 1, text, null, 0, 0),
+    );
+    try testing.expectEqual(
+        c_api.ResultOk,
+        c_api.zslay_conn_prepare_frame(conn, &tx_nodes[1], 1, text, null, 0, 0),
+    );
+}
+
+test "C API: reject invalid close before invoking the mask generator" {
+    var harness = CApiHarness{};
+    var conn_mem: [8192]u8 align(64) = undefined;
+    var tx_nodes: [1]root.FrameNode = undefined;
+    var node = root.FrameNode{ .header_len = 123 };
+
+    const conn_opt = c_api.zslay_conn_init(
+        &conn_mem,
+        &harness,
+        CApiHarness.recv,
+        CApiHarness.send,
+        CApiHarness.on_frame,
+        CApiHarness.gen_mask,
+        &tx_nodes,
+        tx_nodes.len,
+        @backingInt(root.EndpointRole.client),
+        1024,
+        1024,
+    );
+    try testing.expect(conn_opt != null);
+
+    try testing.expectEqual(
+        c_api.ResultProtocolError,
+        c_api.zslay_conn_prepare_frame(
+            conn_opt.?,
+            &node,
+            1,
+            @backingInt(root.Opcode.close),
+            "x",
+            1,
+            1,
+        ),
+    );
+    try testing.expectEqual(@as(usize, 0), harness.mask_calls);
+    try testing.expectEqual(@as(usize, 123), node.header_len);
+}
+
 test "C API: validate close payload export" {
     try testing.expectEqual(c_api.ResultOk, c_api.zslay_validate_close_payload(null, 0));
 
@@ -1612,6 +1766,49 @@ test "C API: receive staging coalesces header and payload" {
     for (harness.received[0..harness.received_len], 0..) |byte, index| {
         try testing.expectEqual(@as(u8, @truncate(index)), byte);
     }
+}
+
+test "C API: stream fragmented frames across receive calls" {
+    const wire = [_]u8{
+        0x01, 0x83, 1, 2, 3, 4, 'a' ^ 1, 'b' ^ 2, 'c' ^ 3,
+        0x80, 0x82, 1, 2, 3, 4, 'd' ^ 1, 'e' ^ 2,
+    };
+    var harness = CApiHarness{ .input = &wire };
+    var conn_mem: [8192]u8 align(64) = undefined;
+    var tx_nodes: [1]root.FrameNode = undefined;
+
+    const conn_opt = c_api.zslay_conn_init(
+        &conn_mem,
+        &harness,
+        CApiHarness.recv,
+        CApiHarness.send,
+        CApiHarness.on_frame,
+        null,
+        &tx_nodes,
+        tx_nodes.len,
+        @backingInt(root.EndpointRole.server),
+        1024,
+        1024,
+    );
+    try testing.expect(conn_opt != null);
+    const conn = conn_opt.?;
+
+    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
+    try testing.expectEqual(@as(usize, 1), harness.chunk_count);
+    try testing.expectEqual(@as(usize, 3), harness.chunk_lens[0]);
+    try testing.expectEqual(@as(u64, 3), harness.chunk_totals[0]);
+    try testing.expectEqual(@as(u8, 0), harness.chunk_fins[0]);
+    try testing.expectEqual(@as(u8, 1), harness.chunk_ends[0]);
+
+    try testing.expectEqual(c_api.ResultProgress, c_api.zslay_conn_recv(conn));
+    try testing.expectEqual(@as(usize, 2), harness.chunk_count);
+    try testing.expectEqual(@as(usize, 2), harness.chunk_lens[1]);
+    try testing.expectEqual(@as(u64, 2), harness.chunk_totals[1]);
+    try testing.expectEqual(@as(u8, 1), harness.chunk_fins[1]);
+    try testing.expectEqual(@as(u8, 1), harness.chunk_ends[1]);
+    try testing.expectEqualSlices(u8, "abcde", harness.received[0..harness.received_len]);
+
+    try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_recv(conn));
 }
 
 test "C API: on_frame payload cannot be queued" {

@@ -19,10 +19,10 @@ Types are plain, top-level declarations with explicit names. Repeated or inline 
 | File | Purpose |
 | --- | --- |
 | `src/types.zig` | Defines RFC 6455 opcodes, close codes, parser errors, packed frame headers, and the named size aliases `MaskingKeyLen`, `MaskingKey`, `MaxFrameHeaderLen`, and `FrameHeaderBuffer`. |
-| `src/frame.zig` | Pure functions that encode and decode frame headers, resolve canonical lengths into `DecodedHeader`, calculate serialized sizes, derive header byte counts, mask payloads in place, and validate close payloads. |
+| `src/frame.zig` | Pure functions that encode and decode frame headers, derive the canonical wire length marker from the payload length, resolve canonical lengths into `DecodedHeader`, calculate serialized sizes, derive header byte counts, mask payloads in place, and validate close payloads. |
 | `src/queue.zig` | Implements a generic bounded deque `Queue(Element)` over caller-provided storage; it performs no allocation. |
-| `src/event.zig` | Holds the iterative receive/transmit state machine, `ConnConfig`, `FrameNode`, `FragmentState`, the concrete `FrameQueue` alias, checked TX header/payload accessors, and ping/pong preemption for an unsent queue head. |
-| `src/c_api.zig` | Exports the role-aware, bounded C ABI, validates opaque handles, guards callback reentrancy, stages receive headers, enforces callback/byte send budgets and payload-overlap rules, and bridges caller-owned storage to the Zig state machine. |
+| `src/event.zig` | Holds the iterative receive/transmit state machine, `ConnConfig`, `FrameNode`, `FragmentState`, the concrete `FrameQueue` alias, checked RX current-frame/remaining and TX overlap accessors, and ping/pong preemption for an unsent queue head. |
+| `src/c_api.zig` | Exports the role-aware, bounded C ABI, validates opaque handles, guards callback reentrancy, stages receive prefixes, enforces callback/byte send budgets and payload-overlap rules, and bridges caller-owned storage to the Zig state machine through `Conn` accessors rather than queue internals. |
 | `src/root.zig` | Defines the public Zig module and re-exports the supported API. |
 | `src/test.zig` | Tests layouts, queues, frame encoding/decoding, masking, TX accessors, malformed-input resilience, C ABI handles, partial sends, and reentrancy. |
 | `src/bench.zig` | Standalone, in-process benchmark for header operations, payload masking, and receive state transitions; prints JSON via `zig build bench -Doptimize=ReleaseFast` and is excluded from the unit test suite. |

@@ -99,11 +99,11 @@ pre-commit run --all-files
 Specialized sub-agents are defined for OpenCode in `.opencode/agents/`, for Codex in `.codex/agents/`, and for agy in `.agents/agents/`. Claude Code loads `CLAUDE.md`, which imports `AGENTS.md`; the same ownership and review rules apply. All agents follow the same repository rules as human contributors: one scope per change, `zig fmt --check .`, and `zig build test` before review.
 
 - Use `zslay-parser`, `zslay-event-loop`, `zslay-c-abi`, `zslay-node-api`, `zslay-testing`, `zslay-release`, and `zslay-docs` for isolated work in their owned paths.
-- Use `zslay-review` (read-only) before opening or merging a pull request. Strict maintainability passes use `thermo-nuclear-code-quality-review`.
+- Use `zslay-review` (read-only) before opening or merging a pull request. Strict maintainability passes use `thermo-nuclear-code-quality-review`; whole-codebase structural refactors use `untangle-codebase`.
 - Use `agy --agent zslay-parser` or the `/agents` picker for the agy definitions. For unattended worker panes, add `--mode auto`. The agy team roles are `zslay-architect`, `zslay-developer`, `zslay-reviewer`, and `zslay-integrator`.
 - Agents hand cross-scope changes to the owning agent instead of editing outside their scope.
 - Do not let an agent commit, push, tag, or open a pull request unless you explicitly asked for it.
-- For coordinated work, use the architect → developer → reviewer → integrator sequence. The architect may run `improve-codebase-architecture`, `codebase-design`, `grilling`, and `grill-me` for design work; domain document writes go to `zslay-docs`.
+- For coordinated work, use the architect → developer → reviewer → integrator sequence. The architect may run `improve-codebase-architecture`, `untangle-codebase`, `codebase-design`, `grilling`, and `grill-me` for design work; untangle implementation and domain document writes go to the developer or `zslay-docs`.
 - For optional Herdr orchestration, follow the activation, role, and worker rules in [AGENTS.md](AGENTS.md#optional-herdr-orchestration).
 - For codebase questions, run `graphify query` before raw search when `graphify-out/graph.json` exists. The detailed roster, ownership, and skill coverage live in [AGENT_DIRECTORY.md](AGENT_DIRECTORY.md).
 
@@ -123,7 +123,7 @@ Full pipeline reference: [CI_CD_PIPELINE.md](CI_CD_PIPELINE.md).
 
 - Lint (`lint.yml`): runs `zig fmt --check .` on every pull request into `main` modifying `.zig`, `.zon`, or `build.zig` files (Ubuntu, Zig 0.17.1 via `mlugg/setup-zig`).
 - Test (`test.yml`): on every pull request and push to `main`, runs `zig fmt --check .` and `nix flake check` inside Nix. The flake checks build the native and musl test derivations, and `zig build test` includes the C ABI smoke test.
-- Release (`publish.yml`): triggered by pushing a version tag matching `v*` (e.g. `v0.4.0`). The `verify` job fails when the tag, the `build.zig.zon` version, and the matching `CHANGELOG.md` section disagree, and passes that section to the release job as the release notes.
+- Release (`publish.yml`): triggered by pushing a version tag matching `v*` (e.g. `v0.4.5`). The `verify` job fails when the tag, the `build.zig.zon` version, and the matching `CHANGELOG.md` section disagree, and passes that section to the release job as the release notes.
   Uses Nix `flake-parts` to cross-compile the static library (`.a` / `.lib`) with `ReleaseSafe` across multiple targets (Linux glibc/musl, macOS, Windows), exclusively packages Linux/macOS targets into tarballs (`.tar.bz2`, `.tar.gz`, `.tar.xz`) and Windows targets into `.zip` natively using the `flake.nix` dev shell, creates the GitHub release named after the tag with the extracted notes, and uploads the generated archives to the release.
 
 ## Cutting a Release
@@ -133,13 +133,13 @@ Releases follow semantic versioning and are driven by `v*` tags, not by pushes t
 1. Bump the version in `build.zig.zon`.
 2. Add a `## [x.y.z]` section to `CHANGELOG.md`; the `verify` job requires the tag, the
    `build.zig.zon` version, and this section to agree, and extracts the section as the
-   release notes (tag `v0.4.0` maps to section `## [0.4.0]`).
+   release notes (tag `v0.4.5` maps to section `## [0.4.5]`).
 3. Land the bump on `main` through a pull request.
 4. Tag the release commit and push the tag:
 
 ```bash
-git tag v0.4.0
-git push origin v0.4.0
+git tag v0.4.5
+git push origin v0.4.5
 
 ```
 

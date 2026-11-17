@@ -15,10 +15,24 @@ const DecodedLength = struct {
     header_len: usize,
 };
 
-// Pure: resolves payload length and header byte count from a base header
+fn length_marker(payload_len: u64) u7 {
+    if (payload_len < types.ExtendedLength16Threshold) return @intCast(payload_len);
+    if (payload_len < types.ExtendedLength64Threshold) return types.ExtendedLength16Marker;
+    return types.ExtendedLength64Marker;
+}
+
+fn extended_length_size(marker: u7) usize {
+    return switch (marker) {
+        types.ExtendedLength16Marker => types.ExtendedLength16Len,
+        types.ExtendedLength64Marker => types.ExtendedLength64Len,
+        else => 0,
+    };
+}
+
 fn read_length(buf: []const u8, payload_len: u7) types.Error!DecodedLength {
+    const header_len = types.BaseHeaderLen + extended_length_size(payload_len);
+
     if (payload_len == types.ExtendedLength16Marker) {
-        const header_len = types.BaseHeaderLen + types.ExtendedLength16Len;
         if (buf.len < header_len) return error.BufferTooShort;
 
         const len: u64 = std.mem.readInt(
@@ -32,7 +46,6 @@ fn read_length(buf: []const u8, payload_len: u7) types.Error!DecodedLength {
     }
 
     if (payload_len == types.ExtendedLength64Marker) {
-        const header_len = types.BaseHeaderLen + types.ExtendedLength64Len;
         if (buf.len < header_len) return error.BufferTooShort;
 
         const len: u64 = std.mem.readInt(
@@ -46,26 +59,18 @@ fn read_length(buf: []const u8, payload_len: u7) types.Error!DecodedLength {
         return .{ .payload_len = len, .header_len = header_len };
     }
 
-    return .{ .payload_len = payload_len, .header_len = types.BaseHeaderLen };
+    return .{ .payload_len = payload_len, .header_len = header_len };
 }
 
-// Pure: derives the number of header bytes from the second base header byte
 pub fn header_bytes_needed(base_len_byte: u8) usize {
-    const len_marker = base_len_byte & 0x7f;
-
-    var needed: usize = types.BaseHeaderLen;
-    if (len_marker == types.ExtendedLength16Marker) {
-        needed += types.ExtendedLength16Len;
-    } else if (len_marker == types.ExtendedLength64Marker) {
-        needed += types.ExtendedLength64Len;
-    }
+    const len_marker: u7 = @intCast(base_len_byte & 0x7f);
+    var needed = types.BaseHeaderLen + extended_length_size(len_marker);
 
     if ((base_len_byte & 0x80) != 0) needed += types.MaskingKeyLen;
 
     return needed;
 }
 
-// Pure: performs in-place WebSocket XOR masking with wide-integer chunks
 pub fn mask(buf: []u8, masking_key: types.MaskingKey, pos: u64) void {
     if (buf.len == 0) return;
 
@@ -98,51 +103,27 @@ pub fn mask(buf: []u8, masking_key: types.MaskingKey, pos: u64) void {
     while (i < buf.len) : (i += 1) buf[i] ^= key[i % types.MaskingKeyLen];
 }
 
-// Pure: computes the physical header byte count or rejects an unencodable length
 pub fn get_serialized_size(payload_len: u64, is_masked: bool) types.Error!usize {
     if (payload_len > types.MaxPayloadLen) return error.InvalidLength;
 
-    var size: usize = types.BaseHeaderLen;
-
-    if (payload_len >= types.ExtendedLength16Threshold) {
-        if (payload_len < types.ExtendedLength64Threshold) {
-            size += types.ExtendedLength16Len;
-        } else {
-            size += types.ExtendedLength64Len;
-        }
-    }
-
+    var size = types.BaseHeaderLen + extended_length_size(length_marker(payload_len));
     if (is_masked) size += types.MaskingKeyLen;
 
     return size;
 }
 
-// Serializes frame properties into a raw byte buffer
 pub fn encode_header(
     buf: []u8,
     header: types.FrameHeader,
     payload_len: u64,
     masking_key: ?types.MaskingKey,
 ) types.Error!usize {
-    const op: types.Opcode = @fromBackingInt(header.opcode);
-    switch (op) {
-        .continuation, .text, .binary, .close, .ping, .pong => {},
-        _ => return error.InvalidOpcode,
-    }
+    const op = types.Opcode.fromWire(header.opcode) orelse return error.InvalidOpcode;
 
     if (header.rsv1) return error.ProtocolError;
     if (header.rsv2) return error.ProtocolError;
     if (header.rsv3) return error.ProtocolError;
     if (payload_len > types.MaxPayloadLen) return error.InvalidLength;
-
-    const marker: u7 = if (payload_len < types.ExtendedLength16Threshold)
-        @intCast(payload_len)
-    else if (payload_len < types.ExtendedLength64Threshold)
-        types.ExtendedLength16Marker
-    else
-        types.ExtendedLength64Marker;
-
-    if (header.payload_len != marker) return error.ProtocolError;
 
     if (op.is_control()) {
         if (!header.fin) return error.ProtocolError;
@@ -155,17 +136,15 @@ pub fn encode_header(
         if (masking_key != null) return error.ProtocolError;
     }
 
-    const extended_size: usize = switch (marker) {
-        types.ExtendedLength16Marker => types.ExtendedLength16Len,
-        types.ExtendedLength64Marker => types.ExtendedLength64Len,
-        else => 0,
-    };
-    const required_size = types.BaseHeaderLen + extended_size +
+    const marker = length_marker(payload_len);
+    const required_size = types.BaseHeaderLen + extended_length_size(marker) +
         if (header.mask) types.MaskingKeyLen else 0;
 
     if (buf.len < required_size) return error.BufferTooShort;
 
-    const header_int: u16 = @bitCast(header);
+    var wire_header = header;
+    wire_header.payload_len = marker;
+    const header_int: u16 = @bitCast(wire_header);
     buf[0] = @intCast(header_int & 0xff);
     buf[1] = @intCast(header_int >> 8);
 
@@ -198,22 +177,17 @@ pub fn encode_header(
     return index;
 }
 
-// Pure: parses a raw byte buffer into a DecodedHeader value
 pub fn decode_header(buf: []const u8) types.Error!DecodedHeader {
     if (buf.len < types.BaseHeaderLen) return error.BufferTooShort;
 
     const header_int = std.mem.readInt(u16, buf[0..types.BaseHeaderLen][0..types.BaseHeaderLen], .little);
     const header: types.FrameHeader = @bitCast(header_int);
-    const op: types.Opcode = @fromBackingInt(header.opcode);
 
     if (header.rsv1) return error.ProtocolError;
     if (header.rsv2) return error.ProtocolError;
     if (header.rsv3) return error.ProtocolError;
 
-    switch (op) {
-        .continuation, .text, .binary, .close, .ping, .pong => {},
-        _ => return error.InvalidOpcode,
-    }
+    const op = types.Opcode.fromWire(header.opcode) orelse return error.InvalidOpcode;
 
     if (op.is_control()) {
         if (!header.fin) return error.ProtocolError;
@@ -247,7 +221,6 @@ pub fn decode_header(buf: []const u8) types.Error!DecodedHeader {
     };
 }
 
-// Pure: validates a close frame payload code and UTF-8 reason
 pub fn validate_close_payload(payload: []const u8) types.Error!void {
     if (payload.len > types.ControlPayloadMax) return error.ProtocolError;
     if (payload.len == 0) return;
