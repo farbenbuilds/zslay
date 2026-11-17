@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.5] - 2026-11-17
+
+### Added
+
+- `untangle-codebase` skill and matching assignments for review and the team architect, developer,
+  reviewer, and integrator roles across OpenCode, Codex, and agy.
+- `Opcode.fromWire`, `Opcode.is_known`, and `EndpointRole.fromWire` for validated wire conversions.
+- `Conn.current_frame`, `Conn.rx_remaining`, `Conn.tx_pending_overlaps`, and
+  `Conn.tx_storage_overlaps` keep the C adapter out of connection internals.
+
+### Changed
+
+- Bump the package version to `0.4.5`.
+- Breaking: `encode_header` now derives the RFC 6455 wire length marker from `payload_len` instead
+  of rejecting a caller-supplied mismatch. Callers no longer need to precompute
+  `FrameHeader.payload_len`.
+- Breaking: `Conn.validate_outgoing_frame` now takes the payload slice and validates close payloads,
+  so prepare and queue paths share one validation definition.
+- Centralize wire-length, opcode, and masking policy behind shared helpers.
+
+### Refactored
+
+- Apply the core untangle pass: group pieces that change together, remove duplicate validation and
+  hidden queue/layout coupling, and remove comments that restate code.
+
 ## [0.4.0] - 2026-11-16
 
 ### Added
