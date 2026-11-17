@@ -564,7 +564,7 @@ pub export fn zslay_conn_prepare_frame(
     }
 
     const masked = is_masked == 1;
-    zslay_conn.conn.validate_outgoing_frame(fin == 1, op, payload_slice, masked) catch |err| {
+    zslay_conn.conn.validate_outgoing_frame_payload(fin == 1, op, payload_slice, masked) catch |err| {
         return map_frame_error(err);
     };
 

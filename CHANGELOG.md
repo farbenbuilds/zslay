@@ -10,12 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Breaking: rename `Opcode.fromWire` to `Opcode.from_wire` and `EndpointRole.fromWire` to
   `EndpointRole.from_wire` to follow the repository's `snake_case` function convention.
-- Breaking: carry forward the `0.4.5` public Zig API changes: `encode_header` derives the RFC 6455
-  wire length marker from `payload_len`, and `Conn.validate_outgoing_frame` takes a payload slice
-  and validates close payloads.
 - Bump the package version to `0.5.0`.
-- `0.5.0` is the semver-correct release boundary for the public Zig API changes first shipped in
-  `0.4.5`.
+- `0.5.0` is the semver boundary for the `from_wire` rename and for the API changes first shipped
+  in `0.4.5`.
+
+### Fixed
+
+- Restore source compatibility for the public Zig API changed in `0.4.5`: `encode_header` again
+  rejects a `FrameHeader.payload_len` that disagrees with `payload_len`, and
+  `Conn.validate_outgoing_frame` again accepts `payload_len: u64`. The payload-slice close
+  validation remains available as `Conn.validate_outgoing_frame_payload`.
 
 ### Removed
 
