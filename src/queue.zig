@@ -25,14 +25,12 @@ pub fn Queue(comptime Element: type) type {
             if (self.len == 0) std.debug.assert(self.head == self.tail);
         }
 
-        // initializes a queue with a pre-allocated slice
         pub fn init(buffer: []Element) Self {
             return .{
                 .buffer = buffer,
             };
         }
 
-        // appends an item to the tail of the queue
         pub fn push_back(self: *Self, item: Element) error{QueueFull}!void {
             self.assert_invariants();
             if (self.len >= self.buffer.len) return error.QueueFull;
@@ -45,7 +43,6 @@ pub fn Queue(comptime Element: type) type {
             self.assert_invariants();
         }
 
-        // prepends an item to the head of the queue
         pub fn push_front(self: *Self, item: Element) error{QueueFull}!void {
             self.assert_invariants();
             if (self.len >= self.buffer.len) return error.QueueFull;
@@ -57,7 +54,6 @@ pub fn Queue(comptime Element: type) type {
             self.assert_invariants();
         }
 
-        // removes and returns the head item of the queue
         pub fn pop_front(self: *Self) ?Element {
             self.assert_invariants();
             if (self.len == 0) return null;
@@ -71,7 +67,6 @@ pub fn Queue(comptime Element: type) type {
             return item;
         }
 
-        // removes and returns the tail item of the queue
         pub fn pop_back(self: *Self) ?Element {
             self.assert_invariants();
             if (self.len == 0) return null;
@@ -84,21 +79,18 @@ pub fn Queue(comptime Element: type) type {
             return item;
         }
 
-        // returns the head item without removing it
         pub fn front(self: *Self) ?*Element {
             self.assert_invariants();
             if (self.len == 0) return null;
             return &self.buffer[self.head];
         }
 
-        // returns the head item through a read-only view
         pub fn front_const(self: *const Self) ?*const Element {
             self.assert_invariants();
             if (self.len == 0) return null;
             return &self.buffer[self.head];
         }
 
-        // advances past the head item without copying it
         pub fn discard_front(self: *Self) void {
             self.assert_invariants();
             if (self.len == 0) return;
@@ -110,7 +102,6 @@ pub fn Queue(comptime Element: type) type {
             self.assert_invariants();
         }
 
-        // drops every queued item and restores empty indices
         pub fn clear(self: *Self) void {
             self.assert_invariants();
             self.head = 0;

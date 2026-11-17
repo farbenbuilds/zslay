@@ -17,6 +17,22 @@ pub const Opcode = enum(u4) {
             else => false,
         };
     }
+
+    pub fn fromWire(raw: u8) ?Opcode {
+        return switch (raw) {
+            @backingInt(Opcode.continuation) => .continuation,
+            @backingInt(Opcode.text) => .text,
+            @backingInt(Opcode.binary) => .binary,
+            @backingInt(Opcode.close) => .close,
+            @backingInt(Opcode.ping) => .ping,
+            @backingInt(Opcode.pong) => .pong,
+            else => null,
+        };
+    }
+
+    pub fn is_known(self: Opcode) bool {
+        return fromWire(@backingInt(self)) != null;
+    }
 };
 
 // WebSocket connection close status codes
@@ -46,6 +62,14 @@ pub const StatusCode = enum(u16) {
 pub const EndpointRole = enum(u8) {
     client = 0,
     server = 1,
+
+    pub fn fromWire(raw: u8) ?EndpointRole {
+        return switch (raw) {
+            @backingInt(EndpointRole.client) => .client,
+            @backingInt(EndpointRole.server) => .server,
+            else => null,
+        };
+    }
 };
 
 // Largest payload length permitted by the RFC 6455 wire format
