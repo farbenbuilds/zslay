@@ -4,97 +4,97 @@
     {
       "bytes_per_op": 8,
       "name": "header_encode_masked",
-      "ns_per_op": 1.233,
-      "ops_per_sec": 810865599.027,
+      "ns_per_op": 0.92,
+      "ops_per_sec": 1086377907.419,
       "sample_durations_ns": [
-        128954,
-        146166,
-        123315,
-        123314,
-        123314,
-        123325,
-        123334
+        103816,
+        91398,
+        92049,
+        92038,
+        92049,
+        92049,
+        91377
       ],
       "samples_ns_per_op": [
-        1.29,
-        1.462,
-        1.233,
-        1.233,
-        1.233,
-        1.233,
-        1.233
+        1.038,
+        0.914,
+        0.92,
+        0.92,
+        0.92,
+        0.92,
+        0.914
       ]
     },
     {
       "bytes_per_op": 8,
       "name": "header_decode_masked",
-      "ns_per_op": 9.109,
-      "ops_per_sec": 109783101.526,
+      "ns_per_op": 6.293,
+      "ops_per_sec": 158912277.245,
       "sample_durations_ns": [
-        948786,
-        909855,
-        910887,
-        907831,
-        902252,
-        937946,
-        937465
+        629278,
+        632552,
+        622588,
+        634225,
+        622587,
+        629438,
+        628707
       ],
       "samples_ns_per_op": [
-        9.488,
-        9.099,
-        9.109,
-        9.078,
-        9.023,
-        9.379,
-        9.375
+        6.293,
+        6.326,
+        6.226,
+        6.342,
+        6.226,
+        6.294,
+        6.287
       ]
     },
     {
       "bytes_per_op": 1024,
       "name": "payload_mask_1024b",
-      "ns_per_op": 23.271,
-      "ops_per_sec": 42971717.734,
+      "ns_per_op": 19.713,
+      "ops_per_sec": 50727740.16,
       "sample_durations_ns": [
-        2717493,
-        2303450,
-        2259790,
-        2327112,
-        2288323,
-        2334987,
-        2328967
+        1995675,
+        1971909,
+        1961944,
+        1986572,
+        1971308,
+        1970768,
+        1970917
       ],
       "samples_ns_per_op": [
-        27.175,
-        23.035,
-        22.598,
-        23.271,
-        22.883,
-        23.35,
-        23.29
+        19.957,
+        19.719,
+        19.619,
+        19.866,
+        19.713,
+        19.708,
+        19.709
       ]
     },
     {
       "bytes_per_op": 136,
       "name": "conn_rx_state_128b",
-      "ns_per_op": 25.111,
-      "ops_per_sec": 39823058.188,
+      "ns_per_op": 19.627,
+      "ops_per_sec": 50949287.118,
       "sample_durations_ns": [
-        2511108,
-        2541082,
-        2520585,
-        2560798,
-        2493846,
-        2493105,
-        2494988
+        1955164,
+        1968735,
+        1957387,
+        1959791,
+        1962736,
+        1970347,
+        1978108
       ],
       "samples_ns_per_op": [
-        25.111,
-        25.411,
-        25.206,
-        25.608,
-        24.938,
-        24.931,
-        24.95
+        19.552,
+        19.687,
+        19.574,
+        19.598,
+        19.627,
+        19.703,
+        19.781
       ]
     }
   ],
@@ -103,20 +103,20 @@
     "event": "schedule",
     "repository": "farbenbuilds/zslay",
     "run_attempt": "1",
-    "run_id": "44077306613"
+    "run_id": "44296431099"
   },
   "iterations_per_sample": 100000,
-  "record_id": "44077306613-1-6f2096d70b34",
-  "recorded_at": "2026-11-17T11:52:10Z",
+  "record_id": "44296431099-1-cad1c759c31b",
+  "recorded_at": "2026-11-18T11:41:10Z",
   "repetitions": 7,
   "runner": {
-    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
     "image": "ubuntu26",
     "kernel": "7.0.0-1019-azure",
     "machine": "x86_64"
   },
   "schema_version": 1,
-  "source_sha": "6f2096d70b34a9e2cebbd8749d08eed5ec6cb693",
+  "source_sha": "cad1c759c31b2fa7c80392ccfadab90a3a1ed762",
   "toolchain": {
     "flake_lock_sha256": "ad18a9e9aa7c58a7d7ba611320161e83ebf14ca2cc95582f5517d056ed31616f",
     "optimize": "ReleaseFast",
