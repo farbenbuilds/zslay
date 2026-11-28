@@ -8,7 +8,8 @@
 extern "C" {
 #endif
 
-#define ZSLAY_ABI_VERSION 1
+/* Revision 2 grows opaque connection storage; the C API remains strict. */
+#define ZSLAY_ABI_VERSION 2
 
 enum zslay_endpoint_role {
     ZSLAY_ROLE_CLIENT = 0,

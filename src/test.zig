@@ -16,6 +16,21 @@ fn init_conn(
     });
 }
 
+fn init_conn_with_rsv1(
+    tx_buffer: []root.FrameNode,
+    role: root.EndpointRole,
+    max_frame_len: u64,
+    max_message_len: u64,
+    allow_rsv1: bool,
+) root.Error!root.Conn {
+    return root.Conn.init(tx_buffer, .{
+        .role = role,
+        .max_frame_len = max_frame_len,
+        .max_message_len = max_message_len,
+        .allow_rsv1 = allow_rsv1,
+    });
+}
+
 fn load_header(conn: *root.Conn, raw: []const u8) root.Error!root.RxAction {
     var offset: usize = 0;
 
@@ -533,6 +548,120 @@ test "Frame: reject reserved bits without negotiated extensions" {
     try testing.expectError(error.ProtocolError, root.decode_header(&[_]u8{ 0xc1, 0x00 }));
     try testing.expectError(error.ProtocolError, root.decode_header(&[_]u8{ 0xa1, 0x00 }));
     try testing.expectError(error.ProtocolError, root.decode_header(&[_]u8{ 0x91, 0x00 }));
+
+    var buf: [2]u8 = undefined;
+    const rsv1 = root.FrameHeader{
+        .opcode = @backingInt(root.Opcode.text),
+        .rsv3 = false,
+        .rsv2 = false,
+        .rsv1 = true,
+        .fin = true,
+        .payload_len = 0,
+        .mask = false,
+    };
+    try testing.expectError(error.ProtocolError, root.encode_header(&buf, rsv1, 0, null));
+
+    var rsv2 = rsv1;
+    rsv2.rsv1 = false;
+    rsv2.rsv2 = true;
+    try testing.expectError(error.ProtocolError, root.encode_header(&buf, rsv2, 0, null));
+
+    var rsv3 = rsv1;
+    rsv3.rsv1 = false;
+    rsv3.rsv3 = true;
+    try testing.expectError(error.ProtocolError, root.encode_header(&buf, rsv3, 0, null));
+}
+
+test "Frame: negotiated rsv1 decodes and encodes a first data frame" {
+    const decoded = try root.decode_header_with_options(&[_]u8{ 0xc1, 0x00 }, .{ .allow_rsv1 = true });
+    try testing.expect(decoded.header.rsv1);
+    try testing.expect(decoded.header.fin);
+    try testing.expectEqual(root.Opcode.text, root.Opcode.from_wire(decoded.header.opcode).?);
+    try testing.expectError(error.ProtocolError, root.decode_header_with_options(&[_]u8{ 0xc1, 0x00 }, .{}));
+
+    var buf: [2]u8 = undefined;
+    const header = root.FrameHeader{
+        .opcode = @backingInt(root.Opcode.text),
+        .rsv3 = false,
+        .rsv2 = false,
+        .rsv1 = true,
+        .fin = true,
+        .payload_len = 0,
+        .mask = false,
+    };
+    try testing.expectEqual(
+        @as(usize, 2),
+        try root.encode_header_with_options(&buf, header, 0, null, .{ .allow_rsv1 = true }),
+    );
+    try testing.expectEqual(@as(u8, 0xc1), buf[0]);
+    try testing.expectError(error.ProtocolError, root.encode_header(&buf, header, 0, null));
+}
+
+test "Frame: negotiated rsv1 still rejects rsv2 and rsv3" {
+    try testing.expectError(
+        error.ProtocolError,
+        root.decode_header_with_options(&[_]u8{ 0xa1, 0x00 }, .{ .allow_rsv1 = true }),
+    );
+    try testing.expectError(
+        error.ProtocolError,
+        root.decode_header_with_options(&[_]u8{ 0x91, 0x00 }, .{ .allow_rsv1 = true }),
+    );
+
+    var buf: [2]u8 = undefined;
+    const base = root.FrameHeader{
+        .opcode = @backingInt(root.Opcode.text),
+        .rsv3 = false,
+        .rsv2 = false,
+        .rsv1 = false,
+        .fin = true,
+        .payload_len = 0,
+        .mask = false,
+    };
+    var rsv2 = base;
+    rsv2.rsv2 = true;
+    try testing.expectError(
+        error.ProtocolError,
+        root.encode_header_with_options(&buf, rsv2, 0, null, .{ .allow_rsv1 = true }),
+    );
+    var rsv3 = base;
+    rsv3.rsv3 = true;
+    try testing.expectError(
+        error.ProtocolError,
+        root.encode_header_with_options(&buf, rsv3, 0, null, .{ .allow_rsv1 = true }),
+    );
+}
+
+test "Frame: negotiated rsv1 is a low-level bit gate" {
+    const ping = try root.decode_header_with_options(&[_]u8{ 0xc9, 0x00 }, .{ .allow_rsv1 = true });
+    try testing.expect(ping.header.rsv1);
+    try testing.expectEqual(root.Opcode.ping, root.Opcode.from_wire(ping.header.opcode).?);
+
+    const continuation = try root.decode_header_with_options(&[_]u8{ 0xc0, 0x00 }, .{ .allow_rsv1 = true });
+    try testing.expect(continuation.header.rsv1);
+    try testing.expectEqual(root.Opcode.continuation, root.Opcode.from_wire(continuation.header.opcode).?);
+
+    var buf: [2]u8 = undefined;
+    const ping_header = root.FrameHeader{
+        .opcode = @backingInt(root.Opcode.ping),
+        .rsv3 = false,
+        .rsv2 = false,
+        .rsv1 = true,
+        .fin = true,
+        .payload_len = 0,
+        .mask = false,
+    };
+    _ = try root.encode_header_with_options(&buf, ping_header, 0, null, .{ .allow_rsv1 = true });
+
+    const continuation_header = root.FrameHeader{
+        .opcode = @backingInt(root.Opcode.continuation),
+        .rsv3 = false,
+        .rsv2 = false,
+        .rsv1 = true,
+        .fin = true,
+        .payload_len = 0,
+        .mask = false,
+    };
+    _ = try root.encode_header_with_options(&buf, continuation_header, 0, null, .{ .allow_rsv1 = true });
 }
 
 test "Frame: validate close payload" {
@@ -868,6 +997,185 @@ test "Connection: validate outbound fragmented frame ordering" {
 
     const next = try conn.prepare_frame(true, .binary, "", false, null);
     try conn.queue_frame(next);
+}
+
+test "Connection: negotiated rsv1 accepts unfragmented first data frames" {
+    var nodes: [1]root.FrameNode = undefined;
+    var conn = try init_conn_with_rsv1(&nodes, .client, 1024, 1024, true);
+
+    try testing.expectEqual(root.RxAction.emit_frame, try load_header(&conn, &[_]u8{ 0xc1, 0x00 }));
+    try conn.complete_frame();
+
+    try testing.expectEqual(root.RxAction.emit_frame, try load_header(&conn, &[_]u8{ 0xc2, 0x00 }));
+    try conn.complete_frame();
+}
+
+test "Connection: negotiated rsv1 accepts a fragmented first data frame" {
+    var nodes: [1]root.FrameNode = undefined;
+    var conn = try init_conn_with_rsv1(&nodes, .client, 1024, 1024, true);
+
+    try testing.expectEqual(root.RxAction.emit_frame, try load_header(&conn, &[_]u8{ 0x41, 0x00 }));
+    try conn.complete_frame();
+    try testing.expect(conn.rx_fragment.opcode != null);
+
+    try testing.expectEqual(root.RxAction.emit_frame, try load_header(&conn, &[_]u8{ 0x80, 0x00 }));
+    try conn.complete_frame();
+    try testing.expectEqual(null, conn.rx_fragment.opcode);
+}
+
+test "Connection: negotiated rsv1 rejects continuation and control frames" {
+    var fragmented_nodes: [1]root.FrameNode = undefined;
+    var fragmented = try init_conn_with_rsv1(&fragmented_nodes, .client, 1024, 1024, true);
+    try testing.expectEqual(root.RxAction.emit_frame, try load_header(&fragmented, &[_]u8{ 0x01, 0x00 }));
+    try fragmented.complete_frame();
+    try testing.expectError(error.ProtocolError, load_header(&fragmented, &[_]u8{ 0xc0, 0x00 }));
+
+    var ping_nodes: [1]root.FrameNode = undefined;
+    var ping = try init_conn_with_rsv1(&ping_nodes, .client, 1024, 1024, true);
+    try testing.expectError(error.ProtocolError, load_header(&ping, &[_]u8{ 0xc9, 0x00 }));
+
+    var close_nodes: [1]root.FrameNode = undefined;
+    var close = try init_conn_with_rsv1(&close_nodes, .client, 1024, 1024, true);
+    try testing.expectError(error.ProtocolError, load_header(&close, &[_]u8{ 0xc8, 0x00 }));
+}
+
+test "Connection: negotiated rsv1 rejects a new data frame mid-fragment" {
+    var nodes: [1]root.FrameNode = undefined;
+    var conn = try init_conn_with_rsv1(&nodes, .client, 1024, 1024, true);
+
+    try testing.expectEqual(root.RxAction.emit_frame, try load_header(&conn, &[_]u8{ 0x01, 0x00 }));
+    try conn.complete_frame();
+    try testing.expectError(error.ProtocolError, load_header(&conn, &[_]u8{ 0xc1, 0x00 }));
+}
+
+test "Connection: default rsv1 rejection remains strict" {
+    var nodes: [1]root.FrameNode = undefined;
+    var conn = try init_conn(&nodes, .client, 1024, 1024);
+
+    try testing.expectError(error.ProtocolError, load_header(&conn, &[_]u8{ 0xc1, 0x00 }));
+    try testing.expectEqual(@as(u64, 0), conn.payload_bytes_processed);
+
+    var rsv2_nodes: [1]root.FrameNode = undefined;
+    var rsv2 = try init_conn(&rsv2_nodes, .client, 1024, 1024);
+    try testing.expectError(error.ProtocolError, load_header(&rsv2, &[_]u8{ 0xa1, 0x00 }));
+
+    var rsv3_nodes: [1]root.FrameNode = undefined;
+    var rsv3 = try init_conn(&rsv3_nodes, .client, 1024, 1024);
+    try testing.expectError(error.ProtocolError, load_header(&rsv3, &[_]u8{ 0x91, 0x00 }));
+}
+
+test "Connection: rsv1 frame limits still apply" {
+    var nodes: [1]root.FrameNode = undefined;
+    var conn = try init_conn_with_rsv1(&nodes, .client, 0, 1024, true);
+
+    try testing.expectError(error.PayloadTooLarge, load_header(&conn, &[_]u8{ 0xc1, 0x01 }));
+}
+
+test "Connection: negotiated rsv1 prepares a first data frame" {
+    var nodes: [2]root.FrameNode = undefined;
+    var conn = try init_conn_with_rsv1(&nodes, .server, 1024, 1024, true);
+
+    const text = try conn.prepare_frame_with_options(true, .text, "", false, null, .{ .rsv1 = true });
+    try testing.expect(text.rsv1());
+    try testing.expectEqual(@as(u8, 0xc1), text.header_buf[0]);
+    try conn.queue_frame(text);
+
+    const binary = try conn.prepare_frame_with_options(true, .binary, "", false, null, .{ .rsv1 = true });
+    try testing.expect(binary.rsv1());
+    try testing.expectEqual(@as(u8, 0xc2), binary.header_buf[0]);
+    try conn.queue_frame(binary);
+}
+
+test "Connection: negotiated rsv1 rejects continuation and control preparation" {
+    var nodes: [1]root.FrameNode = undefined;
+    const conn = try init_conn_with_rsv1(&nodes, .server, 1024, 1024, true);
+
+    try testing.expectError(
+        error.ProtocolError,
+        conn.prepare_frame_with_options(true, .continuation, "", false, null, .{ .rsv1 = true }),
+    );
+    try testing.expectError(
+        error.ProtocolError,
+        conn.prepare_frame_with_options(true, .ping, "", false, null, .{ .rsv1 = true }),
+    );
+    try testing.expectError(
+        error.ProtocolError,
+        conn.prepare_frame_with_options(true, .close, "", false, null, .{ .rsv1 = true }),
+    );
+
+    var strict_nodes: [1]root.FrameNode = undefined;
+    const strict = try init_conn(&strict_nodes, .server, 1024, 1024);
+    try testing.expectError(
+        error.ProtocolError,
+        strict.prepare_frame_with_options(true, .text, "", false, null, .{ .rsv1 = true }),
+    );
+}
+
+test "Connection: negotiated rsv1 rejects a second data frame mid-fragment" {
+    var nodes: [3]root.FrameNode = undefined;
+    var conn = try init_conn_with_rsv1(&nodes, .server, 1024, 1024, true);
+
+    const start = try conn.prepare_frame_with_options(false, .text, "a", false, null, .{ .rsv1 = true });
+    try conn.queue_frame(start);
+    try testing.expect(conn.tx_fragment.opcode != null);
+
+    try testing.expectError(
+        error.ProtocolError,
+        conn.prepare_frame_with_options(true, .binary, "b", false, null, .{ .rsv1 = true }),
+    );
+
+    const finish = try conn.prepare_frame(true, .continuation, "b", false, null);
+    try conn.queue_frame(finish);
+    try testing.expectEqual(null, conn.tx_fragment.opcode);
+}
+
+test "Connection: queue revalidates negotiated rsv1" {
+    var source_nodes: [1]root.FrameNode = undefined;
+    const source = try init_conn_with_rsv1(&source_nodes, .server, 1024, 1024, true);
+    const node = try source.prepare_frame_with_options(true, .text, "", false, null, .{ .rsv1 = true });
+
+    var strict_nodes: [1]root.FrameNode = undefined;
+    var strict = try init_conn(&strict_nodes, .server, 1024, 1024);
+    try testing.expectError(error.ProtocolError, strict.queue_frame(node));
+
+    var allowing_nodes: [1]root.FrameNode = undefined;
+    var allowing = try init_conn_with_rsv1(&allowing_nodes, .server, 1024, 1024, true);
+    try allowing.queue_frame(node);
+}
+
+test "Connection: reset_tx clears negotiated rsv1 state" {
+    var nodes: [2]root.FrameNode = undefined;
+    var conn = try init_conn_with_rsv1(&nodes, .server, 1024, 1024, true);
+
+    const start = try conn.prepare_frame_with_options(false, .text, "a", false, null, .{ .rsv1 = true });
+    try conn.queue_frame(start);
+    conn.reset_tx();
+
+    const fresh = try conn.prepare_frame_with_options(true, .binary, "b", false, null, .{ .rsv1 = true });
+    try conn.queue_frame(fresh);
+}
+
+test "Connection: validate_outgoing_frame_with_options keeps limits and shape" {
+    var nodes: [1]root.FrameNode = undefined;
+    const conn = try init_conn_with_rsv1(&nodes, .server, 1024, 1024, true);
+
+    try conn.validate_outgoing_frame_with_options(true, .text, 0, false, .{ .rsv1 = true });
+    try conn.validate_outgoing_frame_with_options(true, .binary, 0, false, .{ .rsv1 = true });
+    try testing.expectError(
+        error.ProtocolError,
+        conn.validate_outgoing_frame_with_options(true, .continuation, 0, false, .{ .rsv1 = true }),
+    );
+    try testing.expectError(
+        error.ProtocolError,
+        conn.validate_outgoing_frame_with_options(true, .ping, 0, false, .{ .rsv1 = true }),
+    );
+
+    var strict_nodes: [1]root.FrameNode = undefined;
+    const strict = try init_conn(&strict_nodes, .server, 1024, 1024);
+    try testing.expectError(
+        error.ProtocolError,
+        strict.validate_outgoing_frame_with_options(true, .text, 0, false, .{ .rsv1 = true }),
+    );
 }
 
 test "C API: stream chunks with explicit frame completion" {
@@ -1562,7 +1870,9 @@ test "C API: tx_pending, reset_tx, and deinit invalidate the handle" {
     try testing.expect(conn_opt != null);
     const conn = conn_opt.?;
 
+    try testing.expectEqual(@as(u32, 2), c_api.AbiVersion);
     try testing.expectEqual(c_api.AbiVersion, c_api.zslay_abi_version());
+    try testing.expectEqual(@as(usize, 56), c_api.zslay_frame_node_get_size());
     try testing.expectEqual(c_api.ResultOk, c_api.zslay_conn_tx_pending(conn, &pending));
     try testing.expectEqual(@as(usize, 0), pending);
 

@@ -16,7 +16,7 @@ const MaxUnmaskedChunkSize: usize = 64 * 1024;
 
 // Opaque-handle identity and ABI revision
 const ConnMagic: u64 = 0x5a73_6c61_7943_6f6e;
-pub const AbiVersion: u32 = 1;
+pub const AbiVersion: u32 = 2;
 
 pub const ResultOk: c_int = 0;
 pub const ResultProgress: c_int = 1;
@@ -266,6 +266,7 @@ pub export fn zslay_conn_init(
         tx_nodes = tx_nodes_ptr[0..tx_node_count];
     }
 
+    // ABI 2 remains strict: RSV1 has no C option or frame bit.
     const conn = event.Conn.init(tx_nodes, .{
         .role = endpoint_role,
         .max_frame_len = max_frame_len,

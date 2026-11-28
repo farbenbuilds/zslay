@@ -134,6 +134,25 @@ Client connections must provide a cryptographically secure mask callback that fi
 
 Close validation is available to both Zig and C callers through `validate_close_payload` and `zslay_validate_close_payload`: an empty payload is valid, a one-byte payload is rejected, the close code must be 1000-1003, 1007-1014, or 3000-4999, the reason must be valid UTF-8, and the payload must not exceed 125 bytes. Outbound close frames are validated before serialization.
 
+## Negotiated RSV1
+
+RSV1 support is opt-in and default-strict. Set `ConnConfig.allow_rsv1` only
+after the WebSocket extension negotiation succeeds, then use
+`decode_header_with_options`/`encode_header_with_options` with
+`Rsv1Options{ .allow_rsv1 = true }` and `prepare_frame_with_options` with
+`FrameOptions{ .rsv1 = true }`. `FrameNode.rsv1()` reads the bit back from the
+serialized header.
+
+RFC 7692 shape is enforced by `Conn`: RSV1 is valid only on the first text or
+binary frame, fragmented or unfragmented. It is rejected on continuations,
+control frames, a second data frame while a fragmented message is open, and any
+connection that did not negotiate the extension. RSV2 and RSV3 are always
+rejected. The existing strict functions remain strict wrappers.
+
+The C API remains strict in 0.6.0. C ABI version 2 reflects the larger opaque
+connection storage; there is no C RSV1 option or frame bit, and `FrameNode`
+keeps its layout.
+
 ## AI Agent Workflows
 
 Repository-specific sub-agents live in `.opencode/agents/`, `.codex/agents/`, and `.agents/agents/`, covering the parser, event loop, C ABI, Node-API bindings, tests, review, release, and documentation. Each client loads shared skills from `.agents/skills/` plus its platform directory (`.opencode/skills/` or `.codex/skills/`); agy loads the shared skills directly. Claude Code loads `CLAUDE.md`, which imports `AGENTS.md`. Agents verify changes with `zig build test` and `zig fmt --check .`. Whole-codebase structural refactors use `untangle-codebase`; strict maintainability review uses `thermo-nuclear-code-quality-review`. Codebase questions query the local graphify graph when `graphify-out/graph.json` exists. The roster, ownership map, and skill coverage are documented in [AGENT_DIRECTORY.md](AGENT_DIRECTORY.md).
