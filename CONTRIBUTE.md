@@ -123,7 +123,7 @@ Full pipeline reference: [CI_CD_PIPELINE.md](CI_CD_PIPELINE.md).
 
 - Lint (`lint.yml`): runs `zig fmt --check .` on every pull request into `main` modifying `.zig`, `.zon`, or `build.zig` files (Ubuntu, Zig 0.17.1 via `mlugg/setup-zig`).
 - Test (`test.yml`): on every pull request and push to `main`, runs `zig fmt --check .` and `nix flake check` inside Nix. The flake checks build the native and musl test derivations, and `zig build test` includes the C ABI smoke test.
-- Release (`publish.yml`): triggered by pushing a version tag matching `v*` (e.g. `v0.5.0`). The `verify` job fails when the tag, the `build.zig.zon` version, and the matching `CHANGELOG.md` section disagree, and passes that section to the release job as the release notes.
+- Release (`publish.yml`): triggered by pushing a version tag matching `v*` (e.g. `v0.6.0`). The `verify` job fails when the tag, the `build.zig.zon` version, and the matching `CHANGELOG.md` section disagree, and passes that section to the release job as the release notes.
   Uses Nix `flake-parts` to cross-compile the static library (`.a` / `.lib`) with `ReleaseSafe` across multiple targets (Linux glibc/musl, macOS, Windows), exclusively packages Linux/macOS targets into tarballs (`.tar.bz2`, `.tar.gz`, `.tar.xz`) and Windows targets into `.zip` natively using the `flake.nix` dev shell, creates the GitHub release named after the tag with the extracted notes, and uploads the generated archives to the release.
 
 ## Cutting a Release
@@ -133,13 +133,13 @@ Releases follow semantic versioning and are driven by `v*` tags, not by pushes t
 1. Bump the version in `build.zig.zon`.
 2. Add a `## [x.y.z]` section to `CHANGELOG.md`; the `verify` job requires the tag, the
    `build.zig.zon` version, and this section to agree, and extracts the section as the
-   release notes (tag `v0.5.0` maps to section `## [0.5.0]`).
+   release notes (tag `v0.6.0` maps to section `## [0.6.0]`).
 3. Land the bump on `main` through a pull request.
 4. Tag the release commit and push the tag:
 
 ```bash
-git tag v0.5.0
-git push origin v0.5.0
+git tag v0.6.0
+git push origin v0.6.0
 
 ```
 

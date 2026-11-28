@@ -19,12 +19,12 @@ Types are plain, top-level declarations with explicit names. Repeated or inline 
 | File | Purpose |
 | --- | --- |
 | `src/types.zig` | Defines RFC 6455 opcodes, close codes, parser errors, packed frame headers, and the named size aliases `MaskingKeyLen`, `MaskingKey`, `MaxFrameHeaderLen`, and `FrameHeaderBuffer`. |
-| `src/frame.zig` | Pure functions that encode and decode frame headers, derive the canonical wire length marker from the payload length, resolve canonical lengths into `DecodedHeader`, calculate serialized sizes, derive header byte counts, mask payloads in place, and validate close payloads. |
+| `src/frame.zig` | Pure functions that encode and decode frame headers, derive the canonical wire length marker from the payload length, resolve canonical lengths into `DecodedHeader`, calculate serialized sizes, derive header byte counts, mask payloads in place, and validate close payloads. Strict `decode_header`/`encode_header` wrappers remain the default; `Rsv1Options` variants gate only the RSV1 bit, and RSV2/RSV3 stay rejected. |
 | `src/queue.zig` | Implements a generic bounded deque `Queue(Element)` over caller-provided storage; it performs no allocation. |
-| `src/event.zig` | Holds the iterative receive/transmit state machine, `ConnConfig`, `FrameNode`, `FragmentState`, the concrete `FrameQueue` alias, checked RX current-frame/remaining and TX overlap accessors, and ping/pong preemption for an unsent queue head. |
-| `src/c_api.zig` | Exports the role-aware, bounded C ABI, validates opaque handles, guards callback reentrancy, stages receive prefixes, enforces callback/byte send budgets and payload-overlap rules, and bridges caller-owned storage to the Zig state machine through `Conn` accessors rather than queue internals. |
+| `src/event.zig` | Holds the iterative receive/transmit state machine, `ConnConfig` with opt-in `allow_rsv1`, `FrameOptions`, `FrameNode` and its `rsv1()` header accessor, `FragmentState`, the concrete `FrameQueue` alias, checked RX current-frame/remaining and TX overlap accessors, ping/pong preemption, and RFC 7692 first-data-frame RSV1 shape enforcement. |
+| `src/c_api.zig` | Exports the role-aware, bounded C ABI at revision 2, validates opaque handles, guards callback reentrancy, stages receive prefixes, enforces callback/byte send budgets and payload-overlap rules, and bridges caller-owned storage to the Zig state machine through `Conn` accessors rather than queue internals. The C API remains strict with no RSV1 option or frame bit. |
 | `src/root.zig` | Defines the public Zig module and re-exports the supported API. |
-| `src/test.zig` | Tests layouts, queues, frame encoding/decoding, masking, TX accessors, malformed-input resilience, C ABI handles, partial sends, and reentrancy. |
+| `src/test.zig` | Tests layouts, queues, frame encoding/decoding, masking, TX accessors, malformed-input resilience, strict/default and negotiated RSV1 behavior, C ABI handles and revision 2, partial sends, and reentrancy. |
 | `src/bench.zig` | Standalone, in-process benchmark for header operations, payload masking, and receive state transitions; prints JSON via `zig build bench -Doptimize=ReleaseFast` and is excluded from the unit test suite. |
 | `benchmarks/echo_server.c` | Loopback WebSocket echo adapter with chunked handshakes, pipelined-input draining, an 8 KiB receive buffer, idle retirement, and separate node/transmit storage; built by `zig build bench-echo`. |
 | `src/c_api_smoke.c` | C11 ABI smoke test compiled and linked against the installed `zslay.h` and static library; executed by `zig build test`. |
@@ -35,7 +35,7 @@ Types are plain, top-level declarations with explicit names. Repeated or inline 
 | --- | --- |
 | `build.zig` | Builds the Zig module and static C library; defines `test`, `bench`, `bench-echo`, and `check` steps. The `test` step runs Debug and ReleaseSafe suites and compiles, links, and runs the C ABI smoke test. |
 | `build.zig.zon` | Stores package metadata, the minimum Zig version, and published paths. |
-| `include/zslay.h` | Declares the installed C ABI, ABI revision, callback/reentrancy contracts, result codes, storage alignment, and borrowed-memory lifetimes. |
+| `include/zslay.h` | Declares the installed C ABI at revision 2, callback/reentrancy contracts, result codes, storage alignment, and borrowed-memory lifetimes. The C surface remains strict and has no RSV1 option or frame bit. |
 | `flake.nix`, `flake.lock` | Pin the Nix development shell, checks, formatter, and cross-platform release builds. |
 | `.envrc` | Loads the Nix flake through direnv. |
 | `.pre-commit-config.yaml` | Configures local formatting and validation hooks. |

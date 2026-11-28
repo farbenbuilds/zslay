@@ -10,6 +10,8 @@ Core code must remain zero-allocation and I/O-agnostic. Use caller-provided buff
 
 `src/frame.zig` must stay pure: given the same input it returns the same output and writes only into caller-owned buffers. All mutation lives in `src/queue.zig` and `src/event.Conn`, reached exclusively through caller-provided context pointers. Use flat iterative loops with early returns; recursion, dynamic dispatch, and silent fallbacks are prohibited. Invalid input returns a typed error instead of a substituted default.
 
+Negotiated RSV1 remains opt-in and zero-allocation: default functions and `ConnConfig` stay strict; set `ConnConfig.allow_rsv1` only after extension negotiation; RSV1 is valid only on the first text or binary frame, never on continuations, controls, or a second data frame mid-fragment; RSV2 and RSV3 are always rejected.
+
 ## Sub-Agent Directory
 
 `.opencode/agents/`, `.codex/agents/`, and `.agents/agents/` provide matching specialized agents for parser, event-loop, C ABI, Node-API, tests, review, release, and docs work. All three provide an `architect` → `developer` → `reviewer` → `integrator` team procedure; agy names the roles `zslay-architect`, `zslay-developer`, `zslay-reviewer`, and `zslay-integrator`. Read `AGENT_DIRECTORY.md` for the roster, ownership map, workflow, and skill coverage. Each agent follows its listed skills and repository checks. Keep one owner per pull request scope and hand cross-scope work to the owning specialist. Claude Code loads `CLAUDE.md`, which imports this file; treat both files as one rule set.
@@ -102,7 +104,7 @@ Define public types at file scope with explicit names. Extract repeated or inlin
 
 ## Testing Guidelines
 
-Use Zig `test` blocks in `src/test.zig`, named `<Area>: <behavior>`, such as `Frame: decode simple unmasked text frame`. Add focused regression tests for parser, queue, layout, masking, and state-machine changes. No numeric coverage target is defined; changed behavior must be exercised. Run `zig build test` before opening a pull request.
+Use Zig `test` blocks in `src/test.zig`, named `<Area>: <behavior>`, such as `Frame: decode simple unmasked text frame`. Add focused regression tests for parser, queue, layout, masking, and state-machine changes. No numeric coverage target is defined; changed behavior must be exercised. Run `zig build test` before opening a pull request. RSV1 changes must cover default rejection, negotiated acceptance, continuation/control/second-data-frame rejection, queue revalidation, reset, and default-strict ABI behavior.
 
 ## Commit & Pull Request Guidelines
 

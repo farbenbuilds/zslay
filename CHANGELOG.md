@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] - 2026-11-28
+
+### Added
+
+- Negotiated RSV1 support through `ConnConfig.allow_rsv1`, `Rsv1Options`,
+  `FrameOptions`, `decode_header_with_options`, `encode_header_with_options`,
+  `prepare_frame_with_options`, the matching outgoing validation variants, and
+  `FrameNode.rsv1`. Strict functions and default connection configuration
+  remain unchanged.
+- RFC 7692 frame-shape enforcement in `Conn`: RSV1 is permitted only on the
+  first text or binary frame, never on continuations, controls, or a second data
+  frame mid-fragment, and never when the extension was not negotiated. RSV2 and
+  RSV3 remain rejected by every path.
+- Coverage for default rejection, negotiated decode/encode, incoming and
+  outgoing shape checks, queue revalidation, reset, frame limits, and ABI 2.
+
+### Changed
+
+- Bump the package version to `0.6.0`.
+- Bump the C ABI version to 2 because `Conn` grew by the negotiated-RSV1 flag.
+  The C API remains strict: there is no C RSV1 option or frame bit, and
+  `FrameNode` keeps its layout. Rebuild C consumers against the new header.
+
 ## [0.5.0] - 2026-11-17
 
 ### Changed

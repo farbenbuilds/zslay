@@ -9,6 +9,14 @@ pub const DecodedHeader = struct {
     masking_key: ?types.MaskingKey,
 };
 
+/// Opt-in RSV1 bit gate for negotiated extensions.
+///
+/// Default false keeps the strict RFC 6455 parser. `Conn` remains responsible
+/// for the RFC 7692 message-position rules; this option only permits the bit.
+pub const Rsv1Options = struct {
+    allow_rsv1: bool = false,
+};
+
 // Payload byte count and physical header byte count resolved together
 const DecodedLength = struct {
     payload_len: u64,
@@ -118,9 +126,23 @@ pub fn encode_header(
     payload_len: u64,
     masking_key: ?types.MaskingKey,
 ) types.Error!usize {
+    return encode_header_with_options(buf, header, payload_len, masking_key, .{});
+}
+
+/// Encodes one header, optionally permitting the negotiated RSV1 bit.
+///
+/// RSV2 and RSV3 are always rejected. The default `encode_header` wrapper stays
+/// strict. This function does not enforce message-position shape.
+pub fn encode_header_with_options(
+    buf: []u8,
+    header: types.FrameHeader,
+    payload_len: u64,
+    masking_key: ?types.MaskingKey,
+    options: Rsv1Options,
+) types.Error!usize {
     const op = types.Opcode.from_wire(header.opcode) orelse return error.InvalidOpcode;
 
-    if (header.rsv1) return error.ProtocolError;
+    if (header.rsv1 and !options.allow_rsv1) return error.ProtocolError;
     if (header.rsv2) return error.ProtocolError;
     if (header.rsv3) return error.ProtocolError;
     if (payload_len > types.MaxPayloadLen) return error.InvalidLength;
@@ -178,12 +200,20 @@ pub fn encode_header(
 }
 
 pub fn decode_header(buf: []const u8) types.Error!DecodedHeader {
+    return decode_header_with_options(buf, .{});
+}
+
+/// Decodes one header, optionally permitting the negotiated RSV1 bit.
+///
+/// RSV2 and RSV3 are always rejected. The default `decode_header` wrapper stays
+/// strict. This function does not enforce message-position shape.
+pub fn decode_header_with_options(buf: []const u8, options: Rsv1Options) types.Error!DecodedHeader {
     if (buf.len < types.BaseHeaderLen) return error.BufferTooShort;
 
     const header_int = std.mem.readInt(u16, buf[0..types.BaseHeaderLen][0..types.BaseHeaderLen], .little);
     const header: types.FrameHeader = @bitCast(header_int);
 
-    if (header.rsv1) return error.ProtocolError;
+    if (header.rsv1 and !options.allow_rsv1) return error.ProtocolError;
     if (header.rsv2) return error.ProtocolError;
     if (header.rsv3) return error.ProtocolError;
 

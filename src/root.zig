@@ -23,8 +23,11 @@ pub const FrameHeaderBuffer = types.FrameHeaderBuffer;
 
 // re-exports frame operations
 pub const DecodedHeader = frame.DecodedHeader;
+pub const Rsv1Options = frame.Rsv1Options;
 pub const decode_header = frame.decode_header;
+pub const decode_header_with_options = frame.decode_header_with_options;
 pub const encode_header = frame.encode_header;
+pub const encode_header_with_options = frame.encode_header_with_options;
 
 pub const get_serialized_size = frame.get_serialized_size;
 pub const header_bytes_needed = frame.header_bytes_needed;
@@ -40,6 +43,7 @@ pub const Queue = queue.Queue;
 pub const Conn = event.Conn;
 pub const ConnConfig = event.ConnConfig;
 pub const FrameNode = event.FrameNode;
+pub const FrameOptions = event.FrameOptions;
 pub const RxState = event.RxState;
 
 pub const RxAction = event.RxAction;

@@ -24,11 +24,18 @@ pub const RxState = enum(u8) {
     read_payload = 2,
 };
 
-// Caller-provided connection role and frame/message limits
+// Caller-provided connection role, frame/message limits, and negotiated RSV1
 pub const ConnConfig = struct {
     role: types.EndpointRole,
     max_frame_len: u64,
     max_message_len: u64,
+    /// Set only after the caller negotiates an RSV1 extension.
+    allow_rsv1: bool = false,
+};
+
+/// Per-frame outgoing options for negotiated frame extensions.
+pub const FrameOptions = struct {
+    rsv1: bool = false,
 };
 
 // Ring buffer element representing one outgoing frame
@@ -40,6 +47,15 @@ pub const FrameNode = struct {
     payload_sent: usize = 0,
 
     header_buf: types.FrameHeaderBuffer = @splat(0),
+
+    /// Reads the negotiated RSV1 bit from the serialized header.
+    ///
+    /// The encoded header stays the source of truth; `queue_frame` revalidates
+    /// it, so this accessor cannot make an invalid node queueable.
+    pub fn rsv1(self: *const FrameNode) bool {
+        if (self.header_len < types.BaseHeaderLen) return false;
+        return (self.header_buf[0] & 0x40) != 0;
+    }
 };
 
 // Fragment tracking shared by the receive and transmit paths
@@ -104,6 +120,8 @@ pub const Conn = struct {
     rx_fragment: FragmentState = .{},
     tx_fragment: FragmentState = .{},
 
+    allow_rsv1: bool = false,
+
     pub fn init(tx_buffer: []FrameNode, config: ConnConfig) types.Error!Conn {
         if (config.max_frame_len > types.MaxPayloadLen) return error.InvalidLength;
         if (config.max_message_len > types.MaxPayloadLen) return error.InvalidLength;
@@ -113,6 +131,7 @@ pub const Conn = struct {
             .role = config.role,
             .max_frame_len = config.max_frame_len,
             .max_message_len = config.max_message_len,
+            .allow_rsv1 = config.allow_rsv1,
         };
     }
 
@@ -157,12 +176,21 @@ pub const Conn = struct {
         std.debug.assert(node.payload_sent <= node.payload.len);
     }
 
+    fn validate_incoming_rsv1(self: *const Conn, decoded: frame.DecodedHeader, op: types.Opcode) types.Error!void {
+        if (!decoded.header.rsv1) return;
+        if (!self.allow_rsv1) return error.ProtocolError;
+        if (op.is_control()) return error.ProtocolError;
+        if (op == .continuation) return error.ProtocolError;
+        if (self.rx_fragment.opcode != null) return error.ProtocolError;
+    }
+
     fn validate_incoming_header(self: *const Conn, decoded: frame.DecodedHeader) types.Error!void {
         if (decoded.payload_len > self.max_frame_len) return error.PayloadTooLarge;
 
         try validate_incoming_masking(self.role, decoded.header.mask);
 
         const op = types.Opcode.from_wire(decoded.header.opcode) orelse return error.InvalidOpcode;
+        try self.validate_incoming_rsv1(decoded, op);
         if (op.is_control()) return;
 
         switch (op) {
@@ -187,7 +215,10 @@ pub const Conn = struct {
     fn accept_header(self: *Conn) types.Error!void {
         std.debug.assert(self.header_bytes_needed <= types.MaxFrameHeaderLen);
 
-        const decoded = try frame.decode_header(self.header_buf[0..self.header_bytes_needed]);
+        const decoded = try frame.decode_header_with_options(
+            self.header_buf[0..self.header_bytes_needed],
+            .{ .allow_rsv1 = self.allow_rsv1 },
+        );
         try self.validate_incoming_header(decoded);
 
         std.debug.assert(decoded.header_len == self.header_bytes_needed);
@@ -456,14 +487,23 @@ pub const Conn = struct {
             if (@intFromPtr(node.payload.ptr) == 0) return error.InvalidLength;
         }
 
-        const decoded = try frame.decode_header(node.header_buf[0..node.header_len]);
+        const decoded = try frame.decode_header_with_options(
+            node.header_buf[0..node.header_len],
+            .{ .allow_rsv1 = self.allow_rsv1 },
+        );
         if (decoded.header_len != node.header_len) return error.InvalidLength;
 
         const payload_len: u64 = @intCast(node.payload.len);
         if (decoded.payload_len != payload_len) return error.InvalidLength;
 
         const op = types.Opcode.from_wire(decoded.header.opcode) orelse return error.InvalidOpcode;
-        try self.validate_outgoing_frame_payload(decoded.header.fin, op, node.payload, decoded.header.mask);
+        try self.validate_outgoing_frame_payload_with_options(
+            decoded.header.fin,
+            op,
+            node.payload,
+            decoded.header.mask,
+            .{ .rsv1 = decoded.header.rsv1 },
+        );
         if (op.is_control()) return .{ .opcode = op, .fragment = self.tx_fragment };
 
         switch (op) {
@@ -521,6 +561,14 @@ pub const Conn = struct {
         self.assert_tx_invariants();
     }
 
+    fn validate_outgoing_rsv1(self: *const Conn, opcode: types.Opcode, options: FrameOptions) types.Error!void {
+        if (!options.rsv1) return;
+        if (!self.allow_rsv1) return error.ProtocolError;
+        if (opcode.is_control()) return error.ProtocolError;
+        if (opcode == .continuation) return error.ProtocolError;
+        if (self.tx_fragment.opcode != null) return error.ProtocolError;
+    }
+
     // Validates frame properties common to prepare and queue paths
     pub fn validate_outgoing_frame(
         self: *const Conn,
@@ -529,7 +577,25 @@ pub const Conn = struct {
         payload_len: u64,
         is_masked: bool,
     ) types.Error!void {
+        return self.validate_outgoing_frame_with_options(fin, opcode, payload_len, is_masked, .{});
+    }
+
+    /// Validates one outgoing frame, optionally permitting negotiated RSV1.
+    ///
+    /// RSV1 is allowed only on a first text or binary frame, fragmented or
+    /// unfragmented. Continuations, controls, a second data frame mid-fragment,
+    /// and any RSV1 on a connection that did not negotiate it are rejected.
+    pub fn validate_outgoing_frame_with_options(
+        self: *const Conn,
+        fin: bool,
+        opcode: types.Opcode,
+        payload_len: u64,
+        is_masked: bool,
+        options: FrameOptions,
+    ) types.Error!void {
         if (!opcode.is_known()) return error.InvalidOpcode;
+
+        try self.validate_outgoing_rsv1(opcode, options);
 
         if (payload_len > self.max_frame_len) return error.PayloadTooLarge;
 
@@ -550,7 +616,19 @@ pub const Conn = struct {
         payload: []const u8,
         is_masked: bool,
     ) types.Error!void {
-        try self.validate_outgoing_frame(fin, opcode, @intCast(payload.len), is_masked);
+        return self.validate_outgoing_frame_payload_with_options(fin, opcode, payload, is_masked, .{});
+    }
+
+    /// Validates one outgoing payload, optionally permitting negotiated RSV1.
+    pub fn validate_outgoing_frame_payload_with_options(
+        self: *const Conn,
+        fin: bool,
+        opcode: types.Opcode,
+        payload: []const u8,
+        is_masked: bool,
+        options: FrameOptions,
+    ) types.Error!void {
+        try self.validate_outgoing_frame_with_options(fin, opcode, @intCast(payload.len), is_masked, options);
         if (opcode == .close) try frame.validate_close_payload(payload);
     }
 
@@ -562,7 +640,23 @@ pub const Conn = struct {
         is_masked: bool,
         masking_key_opt: ?types.MaskingKey,
     ) types.Error!FrameNode {
-        try self.validate_outgoing_frame_payload(fin, opcode, payload, is_masked);
+        return self.prepare_frame_with_options(fin, opcode, payload, is_masked, masking_key_opt, .{});
+    }
+
+    /// Prepares one frame, optionally setting negotiated RSV1 on its header.
+    ///
+    /// The encoded header is authoritative. `queue_frame` decodes it again with
+    /// the destination connection's `allow_rsv1` policy.
+    pub fn prepare_frame_with_options(
+        self: *const Conn,
+        fin: bool,
+        opcode: types.Opcode,
+        payload: []const u8,
+        is_masked: bool,
+        masking_key_opt: ?types.MaskingKey,
+        options: FrameOptions,
+    ) types.Error!FrameNode {
+        try self.validate_outgoing_frame_payload_with_options(fin, opcode, payload, is_masked, options);
 
         if (is_masked) {
             if (masking_key_opt == null) return error.MaskingKeyRequired;
@@ -583,14 +677,15 @@ pub const Conn = struct {
 
             .rsv3 = false,
             .rsv2 = false,
-            .rsv1 = false,
+            .rsv1 = options.rsv1,
             .fin = fin,
         };
-        node.header_len = try frame.encode_header(
+        node.header_len = try frame.encode_header_with_options(
             &node.header_buf,
             header,
             payload_len,
             key,
+            .{ .allow_rsv1 = self.allow_rsv1 },
         );
         return node;
     }
